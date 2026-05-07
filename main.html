@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taskr</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e11;
+    --surface: #17171c;
+    --surface2: #1f1f27;
+    --border: #2a2a35;
+    --accent: #c8f04a;
+    --accent-dim: #9eb835;
+    --text: #f0f0ee;
+    --muted: #7a7a8a;
+    --danger: #ff5c5c;
+    --radius: 12px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+  }
+
+  /* ── Layout ── */
+  #app {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    position: relative;
+  }
+
+  /* background grid */
+  #app::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,240,74,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,240,74,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 40px;
+    width: 100%;
+    max-width: 440px;
+    position: relative;
+    animation: fadeUp .35s ease both;
+  }
+
+  .card.wide { max-width: 600px; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Logo ── */
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .logo span { color: var(--muted); font-weight: 400; }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 32px;
+    letter-spacing: .04em;
+  }
+
+  /* ── Form elements ── */
+  label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  input[type="text"],
+  input[type="password"],
+  input[type="date"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    padding: 12px 14px;
+    outline: none;
+    transition: border-color .2s;
+    margin-bottom: 18px;
+  }
+
+  input:focus {
+    border-color: var(--accent);
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.6) sepia(1) saturate(3) hue-rotate(35deg);
+    cursor: pointer;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 12px 20px;
+    transition: all .18s;
+    letter-spacing: .03em;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0e0e11;
+    width: 100%;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+  .btn-primary:hover { background: #d8ff5a; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid transparent;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .btn-danger:hover { border-color: var(--danger); background: rgba(255,92,92,.08); }
+
+  .btn-icon {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 12px;
+    font-size: 16px;
+    border-radius: 10px;
+  }
+  .btn-icon:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ── Switcher link ── */
+  .switch-link {
+    text-align: center;
+    margin-top: 22px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .switch-link a {
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .switch-link a:hover { text-decoration: underline; }
+
+  /* ── Error / notice ── */
+  .notice {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 12px;
+    margin-bottom: 16px;
+    animation: fadeUp .2s ease;
+  }
+  .notice.error   { background: rgba(255,92,92,.1);  border: 1px solid rgba(255,92,92,.3);  color: #ff8a8a; }
+  .notice.success { background: rgba(200,240,74,.08); border: 1px solid rgba(200,240,74,.25); color: var(--accent); }
+
+  /* ── Dashboard header ── */
+  .dash-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .dash-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .dash-title span {
+    color: var(--accent);
+  }
+
+  /* ── Task list ── */
+  #task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+
+  #task-list::-webkit-scrollbar { width: 4px; }
+  #task-list::-webkit-scrollbar-track { background: transparent; }
+  #task-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .task-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: border-color .18s;
+    animation: fadeUp .2s ease both;
+  }
+  .task-item:hover { border-color: var(--muted); }
+
+  .task-info { flex: 1; min-width: 0; }
+  .task-name {
+    font-weight: 500;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+  }
+  .task-date {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .task-urgency {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .urgency-overdue  { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+  .urgency-soon     { background: #f0c040; }
+  .urgency-normal   { background: var(--accent); }
+
+  .task-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 0;
+    font-size: 13px;
+  }
+  .empty-state .big { font-size: 32px; margin-bottom: 10px; }
+
+  /* ── Add task form ── */
+  .add-form {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    animation: fadeUp .2s ease;
+  }
+  .add-form .row {
+    display: flex;
+    gap: 10px;
+  }
+  .add-form input { margin-bottom: 10px; }
+  .add-form .row input { margin-bottom: 0; }
+
+  /* ── Modal overlay ── */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 100;
+    animation: fadeIn .15s ease;
+  }
+  @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    width: 100%;
+    max-width: 400px;
+    animation: fadeUp .2s ease;
+  }
+  .modal h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    margin-bottom: 20px;
+  }
+  .modal-btns {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .modal-btns .btn { flex: 1; }
+
+  /* ── Divider ── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 22px 0;
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ─── Auth screens ─── -->
+  <div id="screen-auth">
+    <!-- Login -->
+    <div id="view-login" class="card">
+      <div class="logo">taskr<span>.</span></div>
+      <p class="subtitle">your tasks, sorted.</p>
+      <div id="login-notice"></div>
+      <label>Username</label>
+      <input type="text" id="login-user" placeholder="enter username" autocomplete="username">
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+      <button class="btn btn-primary" onclick="doLogin()">Sign in →</button>
+      <div class="switch-link">No account? <a onclick="showView('signup')">Create one</a></div>
+    </div>
+
+    <!-- Signup -->
+    <div id="view-signup" class="card hidden">
+      <div class="logo">taskr<span>.</span></div>
+      <p class="subtitle">create your account</p>
+      <div id="signup-notice"></div>
+      <label>Username</label>
+      <input type="text" id="signup-user" placeholder="choose a username" autocomplete="username">
+      <label>Password</label>
+      <input type="password" id="signup-pass" placeholder="••••••••" autocomplete="new-password">
+      <label>Confirm Password</label>
+      <input type="password" id="signup-confirm" placeholder="••••••••" autocomplete="new-password">
+      <button class="btn btn-primary" onclick="doSignup()">Create account →</button>
+      <div class="switch-link">Have an account? <a onclick="showView('login')">Sign in</a></div>
+    </div>
+  </div>
+
+  <!-- ─── Dashboard ─── -->
+  <div id="screen-dash" class="card wide hidden">
+    <div class="dash-header">
+      <div>
+        <div class="dash-title">Hey, <span id="dash-username"></span></div>
+        <div style="color:var(--muted);font-size:12px;margin-top:3px;" id="dash-summary"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-icon" title="Add task" onclick="toggleAddForm()">＋</button>
+        <button class="btn btn-ghost" onclick="doLogout()">logout</button>
+      </div>
+    </div>
+
+    <!-- Add task form -->
+    <div id="add-form" class="add-form hidden">
+      <label>Task name</label>
+      <input type="text" id="new-task-name" placeholder="e.g. Submit assignment">
+      <label>Due date</label>
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <input type="date" id="new-task-date" style="flex:1;margin-bottom:0">
+        <button class="btn btn-primary" style="width:auto;margin-top:0;padding:12px 18px" onclick="addTask()">Save</button>
+        <button class="btn btn-ghost" onclick="toggleAddForm()">✕</button>
+      </div>
+    </div>
+    <div id="add-notice"></div>
+
+    <div id="task-list"></div>
+  </div>
+
+  <!-- ─── Edit Modal ─── -->
+  <div id="edit-overlay" class="overlay hidden">
+    <div class="modal">
+      <h3>Edit task</h3>
+      <div id="edit-notice"></div>
+      <label>Task name</label>
+      <input type="text" id="edit-name" placeholder="Task name">
+      <label>Due date</label>
+      <input type="date" id="edit-date">
+      <div class="modal-btns">
+        <button class="btn btn-primary" onclick="saveEdit()">Save changes</button>
+        <button class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
+      </div>
+      <hr class="divider">
+      <button class="btn btn-danger" style="width:100%" onclick="deleteTask()">Delete task</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Storage helpers ──
+const DB_KEY = 'taskr_users';
+
+function getDB() {
+  return JSON.parse(localStorage.getItem(DB_KEY) || '{}');
+}
+function saveDB(db) {
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+function getUser(username) {
+  return getDB()[username] || null;
+}
+function saveUser(username, data) {
+  const db = getDB();
+  db[username] = data;
+  saveDB(db);
+}
+
+// ── State ──
+let currentUser = null;
+let editingTaskName = null;
+
+// ── Auth ──
+function showView(view) {
+  document.getElementById('view-login').classList.toggle('hidden', view !== 'login');
+  document.getElementById('view-signup').classList.toggle('hidden', view !== 'signup');
+  clearNotice('login-notice');
+  clearNotice('signup-notice');
+}
+
+function doLogin() {
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  const user = getUser(u);
+  if (!user || user.password !== p) {
+    setNotice('login-notice', 'Invalid username or password.', 'error');
+    return;
+  }
+  currentUser = u;
+  document.getElementById('screen-auth').classList.add('hidden');
+  document.getElementById('screen-dash').classList.remove('hidden');
+  renderDash();
+}
+
+function doSignup() {
+  const u = document.getElementById('signup-user').value.trim();
+  const p = document.getElementById('signup-pass').value;
+  const c = document.getElementById('signup-confirm').value;
+  if (!u) { setNotice('signup-notice','Username cannot be empty.','error'); return; }
+  if (getUser(u)) { setNotice('signup-notice','Username already taken.','error'); return; }
+  if (!p) { setNotice('signup-notice','Password cannot be empty.','error'); return; }
+  if (p !== c) { setNotice('signup-notice','Passwords do not match.','error'); return; }
+  saveUser(u, { password: p, tasks: {} });
+  setNotice('signup-notice','Account created! Signing you in…','success');
+  setTimeout(() => {
+    document.getElementById('signup-user').value = '';
+    document.getElementById('signup-pass').value = '';
+    document.getElementById('signup-confirm').value = '';
+    document.getElementById('login-user').value = u;
+    showView('login');
+  }, 1000);
+}
+
+function doLogout() {
+  currentUser = null;
+  document.getElementById('screen-dash').classList.add('hidden');
+  document.getElementById('screen-auth').classList.remove('hidden');
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  showView('login');
+}
+
+// ── Dashboard ──
+function renderDash() {
+  const data = getUser(currentUser);
+  document.getElementById('dash-username').textContent = currentUser;
+  const tasks = getSortedTasks(data.tasks);
+  const list = document.getElementById('task-list');
+
+  // summary
+  const today = new Date(); today.setHours(0,0,0,0);
+  const overdue = tasks.filter(t => parseDate(t.date) < today).length;
+  const due7 = tasks.filter(t => { const d = parseDate(t.date); return d >= today && (d - today) <= 7*86400000; }).length;
+  const parts = [];
+  if (tasks.length === 0) parts.push('no tasks yet');
+  else {
+    parts.push(`${tasks.length} task${tasks.length>1?'s':''}`);
+    if (overdue) parts.push(`<span style="color:var(--danger)">${overdue} overdue</span>`);
+    if (due7)    parts.push(`${due7} due this week`);
+  }
+  document.getElementById('dash-summary').innerHTML = parts.join(' · ');
+
+  if (tasks.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="big">📋</div>No tasks yet — hit ＋ to add one.</div>`;
+    return;
+  }
+
+  list.innerHTML = tasks.map(t => {
+    const d = parseDate(t.date);
+    const diff = d - today;
+    let urgClass = 'urgency-normal';
+    if (diff < 0) urgClass = 'urgency-overdue';
+    else if (diff <= 3*86400000) urgClass = 'urgency-soon';
+    const label = formatDateLabel(d, today);
+    return `
+    <div class="task-item">
+      <div class="task-urgency ${urgClass}"></div>
+      <div class="task-info">
+        <div class="task-name" title="${esc(t.name)}">${esc(t.name)}</div>
+        <div class="task-date">${label}</div>
+      </div>
+      <div class="task-actions">
+        <button class="btn btn-icon" style="font-size:13px" onclick="openEdit('${esc(t.name)}')">✎</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function formatDateLabel(d, today) {
+  const diff = Math.round((d - today) / 86400000);
+  const raw = d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  if (diff < 0)  return `<span style="color:var(--danger)">overdue · ${raw}</span>`;
+  if (diff === 0) return `<span style="color:#f0c040">due today</span>`;
+  if (diff === 1) return `<span style="color:#f0c040">due tomorrow · ${raw}</span>`;
+  return raw;
+}
+
+function parseDate(str) {
+  // accepts DD-MM-YYYY or YYYY-MM-DD
+  if (!str) return new Date(8640000000000000);
+  if (str.includes('-') && str.length === 10) {
+    const parts = str.split('-');
+    if (parts[0].length === 4) return new Date(str); // YYYY-MM-DD
+    return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`); // DD-MM-YYYY
+  }
+  return new Date(8640000000000000);
+}
+
+function getSortedTasks(tasksObj) {
+  return Object.entries(tasksObj || {})
+    .map(([name, date]) => ({ name, date }))
+    .sort((a, b) => parseDate(a.date) - parseDate(b.date));
+}
+
+// ── Add task ──
+function toggleAddForm() {
+  const f = document.getElementById('add-form');
+  f.classList.toggle('hidden');
+  if (!f.classList.contains('hidden')) {
+    document.getElementById('new-task-name').focus();
+  }
+}
+
+function addTask() {
+  const name = document.getElementById('new-task-name').value.trim();
+  const date = document.getElementById('new-task-date').value; // YYYY-MM-DD from input[type=date]
+  if (!name) { setNotice('add-notice','Task name is required.','error'); return; }
+  if (!date) { setNotice('add-notice','Due date is required.','error'); return; }
+  const data = getUser(currentUser);
+  if (data.tasks[name]) { setNotice('add-notice','A task with that name already exists.','error'); return; }
+  data.tasks[name] = date;
+  saveUser(currentUser, data);
+  document.getElementById('new-task-name').value = '';
+  document.getElementById('new-task-date').value = '';
+  clearNotice('add-notice');
+  toggleAddForm();
+  renderDash();
+}
+
+// ── Edit / Delete ──
+function openEdit(name) {
+  editingTaskName = name;
+  const data = getUser(currentUser);
+  const date = data.tasks[name] || '';
+  document.getElementById('edit-name').value = name;
+  // normalise date to YYYY-MM-DD for the date input
+  const d = parseDate(date);
+  document.getElementById('edit-date').value = isFinite(d) ? d.toISOString().slice(0,10) : '';
+  clearNotice('edit-notice');
+  document.getElementById('edit-overlay').classList.remove('hidden');
+}
+
+function closeEdit() {
+  document.getElementById('edit-overlay').classList.add('hidden');
+  editingTaskName = null;
+}
+
+function saveEdit() {
+  const newName = document.getElementById('edit-name').value.trim();
+  const newDate = document.getElementById('edit-date').value;
+  if (!newName) { setNotice('edit-notice','Task name cannot be empty.','error'); return; }
+  if (!newDate) { setNotice('edit-notice','Please choose a due date.','error'); return; }
+  const data = getUser(currentUser);
+  delete data.tasks[editingTaskName];
+  data.tasks[newName] = newDate;
+  saveUser(currentUser, data);
+  closeEdit();
+  renderDash();
+}
+
+function deleteTask() {
+  if (!editingTaskName) return;
+  const data = getUser(currentUser);
+  delete data.tasks[editingTaskName];
+  saveUser(currentUser, data);
+  closeEdit();
+  renderDash();
+}
+
+// ── Utils ──
+function setNotice(id, msg, type) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<div class="notice ${type}">${msg}</div>`;
+}
+function clearNotice(id) {
+  document.getElementById(id).innerHTML = '';
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeEdit();
+  if (e.key === 'Enter') {
+    if (!document.getElementById('view-login').classList.contains('hidden') && document.activeElement.closest('#view-login')) doLogin();
+    if (!document.getElementById('view-signup').classList.contains('hidden') && document.activeElement.closest('#view-signup')) doSignup();
+    if (!document.getElementById('edit-overlay').classList.contains('hidden')) saveEdit();
+  }
+});
+
+document.getElementById('edit-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-overlay')) closeEdit();
+});
+</script>
+</body>
+</html>
