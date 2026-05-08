@@ -980,6 +980,7 @@ function maybeAutoEmail() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeEdit(); closeSettings(); }
   if (e.key === 'Enter') {
+    if (!document.getElementById('screen-admin-gate').classList.contains('hidden')) { doAdminLogin(); return; }
     if (!document.getElementById('view-login').classList.contains('hidden') && document.activeElement.closest('#view-login')) doLogin();
     if (!document.getElementById('view-signup').classList.contains('hidden') && document.activeElement.closest('#view-signup')) doSignup();
     if (!document.getElementById('edit-overlay').classList.contains('hidden')) saveEdit();
@@ -1015,7 +1016,12 @@ function showAdminScreen(which) {
 }
 
 window.addEventListener('load', () => {
-  if (location.hash === '#admin') showAdminScreen('gate');
+  if (location.hash === '#admin') {
+    document.getElementById('screen-auth').classList.add('hidden');
+    document.getElementById('screen-dash').classList.add('hidden');
+    document.getElementById('screen-admin-gate').classList.remove('hidden');
+    document.getElementById('screen-admin-panel').classList.add('hidden');
+  }
 });
 
 function doAdminLogin() {
