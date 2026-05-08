@@ -50,6 +50,9 @@ jobs:
               print("No email address set — skipping.")
               exit(0)
 
+          # Support multiple comma-separated addresses
+          addresses = [e.strip() for e in email_addr.split(',') if e.strip()]
+
           username = data.get("username", "there")
           tasks    = data.get("tasks", [])
 
@@ -89,31 +92,32 @@ jobs:
           task_list  = "\n".join(upcoming)
           date_label = mt_now.strftime("%A, %B %d, %Y")
 
-          # Send via EmailJS REST API
-          payload = json.dumps({
-              "service_id":  os.environ["EMAILJS_SERVICE_ID"],
-              "template_id": os.environ["EMAILJS_TEMPLATE_ID"],
-              "user_id":     os.environ["EMAILJS_PUBLIC_KEY"],
-              "template_params": {
-                  "name":      username,
-                  "username":  username,
-                  "time":      date_label,
-                  "message":   "Here are your tasks due within the next 3 days:",
-                  "task_list": task_list,
-                  "to_email":  email_addr,
-              }
-          }).encode()
+          # Send to each address
+          for addr in addresses:
+            payload = json.dumps({
+                "service_id":  os.environ["EMAILJS_SERVICE_ID"],
+                "template_id": os.environ["EMAILJS_TEMPLATE_ID"],
+                "user_id":     os.environ["EMAILJS_PUBLIC_KEY"],
+                "template_params": {
+                    "name":      username,
+                    "username":  username,
+                    "time":      date_label,
+                    "message":   "Here are your tasks due within the next 3 days:",
+                    "task_list": task_list,
+                    "to_email":  addr,
+                }
+            }).encode()
 
-          req = urllib.request.Request(
-              "https://api.emailjs.com/api/v1.0/email/send",
-              data=payload,
-              headers={"Content-Type": "application/json", "origin": "http://localhost"},
-          )
+            req = urllib.request.Request(
+                "https://api.emailjs.com/api/v1.0/email/send",
+                data=payload,
+                headers={"Content-Type": "application/json", "origin": "http://localhost"},
+            )
 
-          try:
-              with urllib.request.urlopen(req) as resp:
-                  print(f"Email sent! Status: {resp.status}")
-          except urllib.error.HTTPError as e:
-              print(f"EmailJS error {e.code}: {e.read().decode()}")
-              exit(1)
+            try:
+                with urllib.request.urlopen(req) as resp:
+                    print(f"Email sent to {addr}! Status: {resp.status}")
+            except urllib.error.HTTPError as e:
+                print(f"EmailJS error {e.code} for {addr}: {e.read().decode()}")
+                exit(1)
           EOF
