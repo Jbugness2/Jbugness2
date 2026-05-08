@@ -4,37 +4,33 @@
   "scheduleEnabled": true,
   "tasks": [
     {
-      "name": "Spanish_Study_Guide",
-      "date": "2026-05-08"
-    },
-    {
-      "name": "Spanish_Charla",
-      "date": "2026-05-08"
-    },
-    {
-      "name": "Astro_project",
-      "date": "2026-05-10"
-    },
-    {
-      "name": "Writing#3",
-      "date": "2026-05-12"
-    },
-    {
-      "name": "Math_Test",
-      "date": "2026-05-13"
+      "name": "Spanish_Final",
+      "date": "2026-05-14"
     },
     {
       "name": "CS_Test",
       "date": "2026-05-14"
     },
     {
-      "name": "Spanish_Final",
-      "date": "2026-05-14"
+      "name": "Writing#3",
+      "date": "2026-05-12"
+    },
+    {
+      "name": "Astro_project",
+      "date": "2026-05-10"
     },
     {
       "name": "English_Project",
       "date": "2026-05-18"
+    },
+    {
+      "name": "Math_Test",
+      "date": "2026-05-13"
+    },
+    {
+      "name": "Spanish_Charla",
+      "date": "2026-05-08"
     }
   ],
-  "lastSynced": "2026-05-08T18:41:01.064Z"
+  "lastSynced": "2026-05-08T23:40:20.467Z"
 }
