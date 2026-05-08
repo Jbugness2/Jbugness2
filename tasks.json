@@ -4,24 +4,8 @@
   "scheduleEnabled": true,
   "tasks": [
     {
-      "name": "Math_Test",
-      "date": "2026-05-13"
-    },
-    {
-      "name": "CS_Test",
-      "date": "2026-05-14"
-    },
-    {
       "name": "Writing#2",
       "date": "2026-05-08"
-    },
-    {
-      "name": "Astro_Project",
-      "date": "2026-05-10"
-    },
-    {
-      "name": "Geo_Final",
-      "date": "2026-05-11"
     },
     {
       "name": "Spanish_Study_Guide",
@@ -32,17 +16,33 @@
       "date": "2026-05-08"
     },
     {
-      "name": "Spanish_Final",
-      "date": "2026-05-14"
+      "name": "Astro_project",
+      "date": "2026-05-10"
+    },
+    {
+      "name": "Geo_Final",
+      "date": "2026-05-11"
     },
     {
       "name": "Writing#3",
       "date": "2026-05-12"
     },
     {
+      "name": "Math_Test",
+      "date": "2026-05-13"
+    },
+    {
+      "name": "CS_Test",
+      "date": "2026-05-14"
+    },
+    {
+      "name": "Spanish_Final",
+      "date": "2026-05-14"
+    },
+    {
       "name": "English_Project",
       "date": "2026-05-18"
     }
   ],
-  "lastSynced": "2026-05-08T05:59:56.742Z"
+  "lastSynced": "2026-05-08T06:11:23.708Z"
 }
