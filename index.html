@@ -403,6 +403,7 @@
       <div style="display:flex;gap:8px;">
         <button class="btn btn-icon" title="Add task" onclick="toggleAddForm()">＋</button>
         <button class="btn btn-icon" title="Settings" onclick="openSettings()">⚙</button>
+        <button id="admin-btn" class="btn btn-icon hidden" title="Admin panel" onclick="openAdminFromDash()">🛠</button>
         <button class="btn btn-ghost" onclick="openLogout()">logout</button>
       </div>
     </div>
@@ -496,8 +497,9 @@
           <div id="email-section" class="hidden">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end">
               <div>
-                <label>Your Email Address</label>
-                <input type="text" id="set-email" placeholder="you@example.com" style="margin-bottom:0">
+                <label>Email Addresses</label>
+                <input type="text" id="set-email" placeholder="you@example.com, other@example.com" style="margin-bottom:0">
+                <div style="color:var(--muted);font-size:10px;margin-top:4px">Separate multiple emails with commas</div>
               </div>
               <div>
                 <label>Frequency</label>
@@ -571,8 +573,9 @@
         </label>
       </div>
       <div id="schedule-on" class="hidden" style="margin-top:12px">
-        <label>Email Address for Morning Reminder</label>
-        <input type="text" id="sched-email" placeholder="you@example.com" style="margin-bottom:0">
+        <label>Email Addresses for Morning Reminder</label>
+        <input type="text" id="sched-email" placeholder="you@example.com, other@example.com" style="margin-bottom:4px">
+        <div style="color:var(--muted);font-size:10px;margin-bottom:0">Separate multiple emails with commas</div>
       </div>
     </div>
 
@@ -636,6 +639,7 @@ function doLogin() {
   currentUser = u;
   document.getElementById('screen-auth').classList.add('hidden');
   document.getElementById('screen-dash').classList.remove('hidden');
+  if (u === ADMIN_USER) document.getElementById('admin-btn').classList.remove('hidden');
   renderDash();
   maybeAutoEmail();
 }
@@ -928,27 +932,37 @@ function buildTaskList() {
   }).join('\n');
 }
 
+function getEmailAddresses(addressStr) {
+  return (addressStr || '').split(',').map(e => e.trim()).filter(Boolean);
+}
+
+function sendToAll(addresses, taskList, onDone, onFail) {
+  const time = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const sends = addresses.map(addr =>
+    emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+      name: currentUser, username: currentUser, time,
+      message: 'Here are your upcoming tasks due within the next 3 days:',
+      task_list: taskList, to_email: addr,
+    })
+  );
+  Promise.all(sends).then(onDone).catch(onFail);
+}
+
 function sendReminderEmail() {
   const data = getUser(currentUser);
   const email = data.emailSettings;
-  if (!email?.address) { setNotice('settings-notice','Save an email address first.','error'); return; }
+  const addresses = getEmailAddresses(email?.address);
+  if (!addresses.length) { setNotice('settings-notice','Save an email address first.','error'); return; }
   const taskList = buildTaskList();
   if (!taskList) { setNotice('settings-notice','No tasks due within 3 days — nothing to send!','success'); return; }
-  setNotice('settings-notice','Sending…','success');
-  emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-    name: currentUser,
-    username: currentUser,
-    time: new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
-    message: 'Here are your upcoming tasks due within the next 3 days:',
-    task_list: taskList,
-    to_email: email.address,
-  }).then(() => {
+  setNotice('settings-notice',`Sending to ${addresses.length} address${addresses.length>1?'es':''}…`,'success');
+  sendToAll(addresses, taskList, () => {
     const d = getUser(currentUser);
     d.emailSettings.lastSent = Date.now();
     saveUser(currentUser, d);
-    setNotice('settings-notice','Email sent! Check your inbox.','success');
-  }).catch(err => {
-    setNotice('settings-notice',`Failed to send: ${err.text || 'unknown error'}`, 'error');
+    setNotice('settings-notice',`✓ Email sent to ${addresses.length} address${addresses.length>1?'es':''}!`,'success');
+  }, err => {
+    setNotice('settings-notice',`Failed to send: ${err.text || 'unknown error'}`,'error');
   });
 }
 
@@ -956,24 +970,19 @@ function sendReminderEmail() {
 function maybeAutoEmail() {
   const data = getUser(currentUser);
   const email = data.emailSettings;
-  if (!email?.enabled || email.frequency !== 'daily' || !email.address) return;
+  const addresses = getEmailAddresses(email?.address);
+  if (!email?.enabled || email.frequency !== 'daily' || !addresses.length) return;
   const last = email.lastSent ? new Date(email.lastSent) : null;
   const today = new Date(); today.setHours(0,0,0,0);
-  if (last && new Date(last) >= today) return; // already sent today
+  if (last && new Date(last) >= today) return;
   const taskList = buildTaskList();
   if (!taskList) return;
-  emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-    name: currentUser,
-    username: currentUser,
-    time: new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
-    message: 'Here are your upcoming tasks due within the next 3 days:',
-    task_list: taskList,
-    to_email: email.address,
-  }).then(() => {
+  sendToAll(addresses, taskList, () => {
     const d = getUser(currentUser);
     d.emailSettings.lastSent = Date.now();
     saveUser(currentUser, d);
-  });
+  }, () => {});
+
 }
 
 
@@ -992,10 +1001,18 @@ document.getElementById('edit-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('edit-overlay')) closeEdit();
 });
 
+function openAdminFromDash() {
+  document.getElementById('screen-dash').classList.add('hidden');
+  document.getElementById('screen-admin-panel').classList.remove('hidden');
+  document.getElementById('screen-admin-gate').classList.add('hidden');
+  history.replaceState(null,'','#admin');
+  initAdminPanel();
+}
+
 // ── Admin routing ──
 const ADMIN_USER   = 'jbug';
 const GITHUB_OWNER = 'Jbugness2';
-const GITHUB_REPO  = 'Jbugness2';
+const GITHUB_REPO  = 'My_Taskr';
 const TOKEN_KEY    = 'taskr_gh_token';
 
 function showAdminScreen(which) {
