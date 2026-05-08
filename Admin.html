@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taskr — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0e0e11; --surface: #17171c; --surface2: #1f1f27;
+    --border: #2a2a35; --accent: #c8f04a; --text: #f0f0ee;
+    --muted: #7a7a8a; --danger: #ff5c5c; --radius: 12px;
+  }
+  html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 14px; }
+  #app {
+    min-height: 100vh; display: flex; align-items: center;
+    justify-content: center; padding: 24px; position: relative;
+  }
+  #app::before {
+    content: ''; position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(200,240,74,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,240,74,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 40px; width: 100%; max-width: 580px;
+    animation: fadeUp .35s ease both;
+  }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+
+  .logo { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; letter-spacing: -1px; color: var(--accent); }
+  .logo span { color: var(--muted); font-weight: 400; }
+  .badge {
+    display: inline-block; font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; background: rgba(200,240,74,.1);
+    color: var(--accent); border: 1px solid rgba(200,240,74,.25);
+    border-radius: 6px; padding: 3px 8px; margin-left: 10px; vertical-align: middle;
+  }
+
+  label { display:block; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  input[type="text"], input[type="password"] {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: 'DM Mono', monospace;
+    font-size: 14px; padding: 12px 14px; outline: none; transition: border-color .2s; margin-bottom: 16px;
+  }
+  input:focus { border-color: var(--accent); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: none; border-radius: var(--radius); cursor: pointer;
+    font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+    padding: 12px 20px; transition: all .18s; letter-spacing: .03em; white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #0e0e11; width: 100%; font-weight: 700; }
+  .btn-primary:hover { background: #d8ff5a; transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .notice {
+    padding: 10px 14px; border-radius: 10px; font-size: 12px;
+    margin-bottom: 16px; animation: fadeUp .2s ease;
+  }
+  .notice.error   { background: rgba(255,92,92,.1);  border: 1px solid rgba(255,92,92,.3);  color: #ff8a8a; }
+  .notice.success { background: rgba(200,240,74,.08); border: 1px solid rgba(200,240,74,.25); color: var(--accent); }
+  .notice.info    { background: rgba(100,150,255,.08); border: 1px solid rgba(100,150,255,.25); color: #a0b4ff; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+  .section {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 14px;
+  }
+  .section-title {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px;
+    margin-bottom: 6px; color: var(--text);
+  }
+  .section-sub { color: var(--muted); font-size: 11px; margin-bottom: 16px; line-height: 1.6; }
+
+  .task-preview {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; font-size: 12px; color: var(--muted); margin-bottom: 14px;
+    max-height: 160px; overflow-y: auto; white-space: pre-wrap; line-height: 1.8;
+  }
+
+  /* toggle */
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .toggle-switch { position:relative; display:inline-block; width:42px; height:24px; cursor:pointer; }
+  .toggle-switch input { opacity:0; width:0; height:0; }
+  .toggle-slider { position:absolute; inset:0; background:var(--surface); border:1px solid var(--border); border-radius:24px; transition:.2s; }
+  .toggle-slider::before { content:''; position:absolute; width:16px; height:16px; left:3px; bottom:3px; background:var(--muted); border-radius:50%; transition:.2s; }
+  .toggle-switch input:checked + .toggle-slider { background:var(--accent); border-color:var(--accent); }
+  .toggle-switch input:checked + .toggle-slider::before { transform:translateX(18px); background:#0e0e11; }
+
+  .hidden { display: none !important; }
+
+  #access-denied { text-align:center; padding: 40px 0; }
+  #access-denied .big { font-size: 40px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Login gate -->
+  <div id="screen-gate" class="card">
+    <div style="margin-bottom:28px">
+      <div class="logo">taskr<span>.</span> <span class="badge">admin</span></div>
+      <div style="color:var(--muted);font-size:12px;margin-top:6px">Sign in to access the admin panel</div>
+    </div>
+    <div id="gate-notice"></div>
+    <label>Username</label>
+    <input type="text" id="gate-user" placeholder="enter username" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="gate-pass" placeholder="••••••••" autocomplete="current-password">
+    <button class="btn btn-primary" onclick="doGateLogin()">Sign in →</button>
+    <div style="text-align:center;margin-top:18px;font-size:12px;color:var(--muted)">
+      <a href="index.html" style="color:var(--accent);text-decoration:none">← Back to Taskr</a>
+    </div>
+  </div>
+
+  <!-- Access denied (wrong user) -->
+  <div id="screen-denied" class="card hidden">
+    <div id="access-denied">
+      <div class="big">🚫</div>
+      <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:8px">Access Denied</div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:24px">This panel is only accessible to the admin account.</div>
+      <a href="index.html"><button class="btn btn-ghost" style="width:auto;margin:0 auto">← Back to Taskr</button></a>
+    </div>
+  </div>
+
+  <!-- Admin panel -->
+  <div id="screen-admin" class="card hidden" style="max-width:580px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+      <div>
+        <div class="logo">taskr<span>.</span> <span class="badge">admin</span></div>
+        <div style="color:var(--muted);font-size:12px;margin-top:4px">Scheduled email sync panel</div>
+      </div>
+      <a href="index.html"><button class="btn btn-ghost" style="width:auto">← Tasks</button></a>
+    </div>
+
+    <div id="admin-notice"></div>
+
+    <!-- Step 1: GitHub Token -->
+    <div class="section">
+      <div class="section-title">① GitHub Personal Access Token</div>
+      <div class="section-sub">
+        Required to sync your tasks to GitHub so the daily email can read them.<br>
+        Create one at <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--accent)">github.com/settings/tokens</a> — enable the <strong style="color:var(--text)">repo</strong> scope. It's only stored in your browser.
+      </div>
+      <label>Personal Access Token</label>
+      <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="margin-bottom:8px">
+      <button class="btn btn-ghost" style="width:auto;font-size:12px;padding:8px 14px" onclick="saveToken()">Save Token</button>
+      <span id="token-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>
+    </div>
+
+    <!-- Step 2: Scheduled email toggle -->
+    <div class="section">
+      <div class="toggle-row">
+        <div>
+          <div class="section-title" style="margin-bottom:2px">② Daily 7am Email (MT)</div>
+          <div style="color:var(--muted);font-size:11px">GitHub Actions sends the email every morning at 7am Mountain Time.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="schedule-toggle" onchange="toggleSchedule()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="schedule-on" class="hidden" style="margin-top:12px">
+        <label>Email Address for Morning Reminder</label>
+        <input type="text" id="sched-email" placeholder="you@example.com" style="margin-bottom:0">
+      </div>
+    </div>
+
+    <!-- Step 3: Sync -->
+    <div class="section">
+      <div class="section-title">③ Sync Tasks to GitHub</div>
+      <div class="section-sub">
+        Pushes your current task list to <code style="color:var(--accent)">tasks.json</code> in your repo. GitHub Actions reads this file each morning to build your email.
+      </div>
+      <div id="task-preview" class="task-preview">Loading tasks…</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="syncTasks()">Sync Tasks Now</button>
+        <button class="btn btn-ghost" onclick="refreshPreview()">Refresh</button>
+      </div>
+    </div>
+
+    <div style="color:var(--muted);font-size:11px;line-height:1.7;margin-top:4px">
+      💡 Sync your tasks whenever you add/edit them so the morning email stays accurate. The GitHub Action runs at <strong style="color:var(--text)">2:00 UTC (7am MT)</strong> daily.
+    </div>
+  </div>
+</div>
+
+<script>
+const ADMIN_USER = 'jbug';
+const GITHUB_OWNER = 'Jbugness2';
+const GITHUB_REPO  = 'Jbugness2';
+const TASKS_FILE   = 'tasks.json';
+const DB_KEY       = 'taskr_users';
+const TOKEN_KEY    = 'taskr_gh_token';
+
+let adminUser = null;
+
+// ── Storage ──
+function getDB() { return JSON.parse(localStorage.getItem(DB_KEY) || '{}'); }
+function getUser(u) { return getDB()[u] || null; }
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function saveToken() {
+  const t = document.getElementById('gh-token').value.trim();
+  if (!t) { document.getElementById('token-status').textContent = 'Enter a token first.'; return; }
+  localStorage.setItem(TOKEN_KEY, t);
+  document.getElementById('token-status').textContent = '✓ Saved';
+  document.getElementById('gh-token').value = '';
+}
+
+// ── Login gate ──
+function doGateLogin() {
+  const u = document.getElementById('gate-user').value.trim();
+  const p = document.getElementById('gate-pass').value;
+  const user = getUser(u);
+  if (!user || user.password !== p) {
+    setNotice('gate-notice', 'Invalid username or password.', 'error');
+    return;
+  }
+  if (u !== ADMIN_USER) {
+    document.getElementById('screen-gate').classList.add('hidden');
+    document.getElementById('screen-denied').classList.remove('hidden');
+    return;
+  }
+  adminUser = u;
+  document.getElementById('screen-gate').classList.add('hidden');
+  document.getElementById('screen-admin').classList.remove('hidden');
+  initAdmin();
+}
+
+// ── Admin init ──
+function initAdmin() {
+  // restore token indicator
+  if (getToken()) {
+    document.getElementById('token-status').textContent = '✓ Token saved';
+  }
+  // restore schedule prefs
+  const data = getUser(adminUser);
+  const sched = data.schedSettings || {};
+  document.getElementById('schedule-toggle').checked = !!sched.enabled;
+  document.getElementById('sched-email').value = sched.email || (data.emailSettings?.address || '');
+  document.getElementById('schedule-on').classList.toggle('hidden', !sched.enabled);
+  refreshPreview();
+}
+
+function toggleSchedule() {
+  const on = document.getElementById('schedule-toggle').checked;
+  document.getElementById('schedule-on').classList.toggle('hidden', !on);
+  saveSchedPrefs();
+}
+
+function saveSchedPrefs() {
+  const db = getDB();
+  if (!db[adminUser]) return;
+  db[adminUser].schedSettings = {
+    enabled: document.getElementById('schedule-toggle').checked,
+    email: document.getElementById('sched-email').value.trim(),
+  };
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+// ── Task preview ──
+function refreshPreview() {
+  const data = getUser(adminUser);
+  const tasks = Object.entries(data.tasks || {});
+  const el = document.getElementById('task-preview');
+  if (!tasks.length) { el.textContent = 'No tasks found.'; return; }
+  el.textContent = tasks.map(([name, date]) => `• ${name}  →  ${date}`).join('\n');
+}
+
+// ── Sync to GitHub ──
+async function syncTasks() {
+  const token = getToken();
+  if (!token) { setNotice('admin-notice','Save your GitHub token first.','error'); return; }
+
+  const schedOn = document.getElementById('schedule-toggle').checked;
+  const schedEmail = document.getElementById('sched-email').value.trim();
+  if (schedOn && !schedEmail) { setNotice('admin-notice','Enter an email address for the morning reminder.','error'); return; }
+
+  saveSchedPrefs();
+
+  const data = getUser(adminUser);
+  const payload = {
+    username: adminUser,
+    email: schedEmail,
+    scheduleEnabled: schedOn,
+    tasks: Object.entries(data.tasks || {}).map(([name, date]) => ({ name, date })),
+    lastSynced: new Date().toISOString(),
+  };
+
+  setNotice('admin-notice','Syncing to GitHub…','info');
+
+  try {
+    // Get current file SHA (needed for update)
+    const headers = {
+      'Authorization': `token ${token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    };
+
+    let sha = null;
+    const getResp = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${TASKS_FILE}`, { headers });
+    if (getResp.ok) {
+      const existing = await getResp.json();
+      sha = existing.sha;
+    }
+
+    const body = {
+      message: `sync: update tasks.json [${new Date().toLocaleString()}]`,
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2)))),
+    };
+    if (sha) body.sha = sha;
+
+    const putResp = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${TASKS_FILE}`, {
+      method: 'PUT', headers, body: JSON.stringify(body),
+    });
+
+    if (putResp.ok) {
+      setNotice('admin-notice', '✓ Tasks synced to GitHub! The morning email will use this data.', 'success');
+      refreshPreview();
+    } else {
+      const err = await putResp.json();
+      setNotice('admin-notice', `GitHub error: ${err.message}`, 'error');
+    }
+  } catch (e) {
+    setNotice('admin-notice', `Network error: ${e.message}`, 'error');
+  }
+}
+
+// ── Utils ──
+function setNotice(id, msg, type) {
+  document.getElementById(id).innerHTML = `<div class="notice ${type}">${msg}</div>`;
+}
+
+// Enter key on gate
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !document.getElementById('screen-gate').classList.contains('hidden')) doGateLogin();
+});
+</script>
+</body>
+</html>
