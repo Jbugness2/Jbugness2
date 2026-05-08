@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My_Taskr</title>
+<title>Taskr</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -349,7 +349,7 @@
   <div id="screen-auth">
     <!-- Login -->
     <div id="view-login" class="card">
-      <div class="logo">My_Taskr<span>.</span></div>
+      <div class="logo">taskr<span>.</span></div>
       <p class="subtitle">your tasks, sorted.</p>
       <div id="login-notice"></div>
       <label>Username</label>
@@ -362,7 +362,7 @@
 
     <!-- Signup -->
     <div id="view-signup" class="card hidden">
-      <div class="logo">My_Taskr<span>.</span></div>
+      <div class="logo">taskr<span>.</span></div>
       <p class="subtitle">create your account</p>
       <div id="signup-notice"></div>
       <label>Username</label>
@@ -385,7 +385,7 @@
       </div>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-icon" title="Add task" onclick="toggleAddForm()">＋</button>
-        <button class="btn btn-ghost" onclick="doLogout()">logout</button>
+        <button class="btn btn-ghost" onclick="openLogout()">logout</button>
       </div>
     </div>
 
@@ -403,6 +403,18 @@
     <div id="add-notice"></div>
 
     <div id="task-list"></div>
+  </div>
+
+  <!-- ─── Logout Confirm Modal ─── -->
+  <div id="logout-overlay" class="overlay hidden">
+    <div class="modal">
+      <h3>Sign out?</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:24px;">Your tasks are saved — you can pick up where you left off.</p>
+      <div class="modal-btns">
+        <button class="btn btn-danger" style="background:rgba(255,92,92,.12);border:1px solid var(--danger)" onclick="doLogout()">Yes, sign out</button>
+        <button class="btn btn-ghost" onclick="closeLogout()">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <!-- ─── Edit Modal ─── -->
@@ -488,7 +500,14 @@ function doSignup() {
   }, 1000);
 }
 
+function openLogout() {
+  document.getElementById('logout-overlay').classList.remove('hidden');
+}
+function closeLogout() {
+  document.getElementById('logout-overlay').classList.add('hidden');
+}
 function doLogout() {
+  closeLogout();
   currentUser = null;
   document.getElementById('screen-dash').classList.add('hidden');
   document.getElementById('screen-auth').classList.remove('hidden');
@@ -524,17 +543,29 @@ function renderDash() {
 
   list.innerHTML = tasks.map(t => {
     const d = parseDate(t.date);
-    const diff = d - today;
+    const diffMs = d - today;
+    const diffDays = Math.round(diffMs / 86400000);
     let urgClass = 'urgency-normal';
-    if (diff < 0) urgClass = 'urgency-overdue';
-    else if (diff <= 3*86400000) urgClass = 'urgency-soon';
+    if (diffMs < 0) urgClass = 'urgency-overdue';
+    else if (diffMs <= 3*86400000) urgClass = 'urgency-soon';
     const label = formatDateLabel(d, today);
+
+    let daysLabel, daysColor;
+    if (diffDays < 0)      { daysLabel = `${Math.abs(diffDays)}d ago`; daysColor = 'var(--danger)'; }
+    else if (diffDays === 0) { daysLabel = 'today';  daysColor = '#f0c040'; }
+    else if (diffDays === 1) { daysLabel = '1d';     daysColor = '#f0c040'; }
+    else                     { daysLabel = `${diffDays}d`;  daysColor = 'var(--muted)'; }
+
     return `
     <div class="task-item">
       <div class="task-urgency ${urgClass}"></div>
       <div class="task-info">
         <div class="task-name" title="${esc(t.name)}">${esc(t.name)}</div>
         <div class="task-date">${label}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;min-width:44px">
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:${daysColor}">${daysLabel}</div>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:.05em">days left</div>
       </div>
       <div class="task-actions">
         <button class="btn btn-icon" style="font-size:13px" onclick="openEdit('${esc(t.name)}')">✎</button>
