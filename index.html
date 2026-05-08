@@ -516,6 +516,81 @@
       </div>
     </div>
   </div>
+  <!-- ─── Admin Login Gate ─── -->
+  <div id="screen-admin-gate" class="card hidden">
+    <div style="margin-bottom:28px">
+      <div class="logo">taskr<span>.</span> <span style="display:inline-block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:rgba(200,240,74,.1);color:var(--accent);border:1px solid rgba(200,240,74,.25);border-radius:6px;padding:3px 8px;margin-left:8px;vertical-align:middle;font-family:'DM Mono',monospace">admin</span></div>
+      <div style="color:var(--muted);font-size:12px;margin-top:6px">Admin access only</div>
+    </div>
+    <div id="admin-gate-notice"></div>
+    <label>Username</label>
+    <input type="text" id="admin-gate-user" placeholder="enter username" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="admin-gate-pass" placeholder="••••••••">
+    <button class="btn btn-primary" onclick="doAdminLogin()">Sign in →</button>
+    <div style="text-align:center;margin-top:18px;font-size:12px">
+      <a onclick="showAdminScreen('gate-back')" style="color:var(--accent);cursor:pointer;text-decoration:none">← Back to Taskr</a>
+    </div>
+  </div>
+
+  <!-- ─── Admin Panel ─── -->
+  <div id="screen-admin-panel" class="card wide hidden" style="max-width:580px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+      <div>
+        <div class="logo">taskr<span>.</span> <span style="display:inline-block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:rgba(200,240,74,.1);color:var(--accent);border:1px solid rgba(200,240,74,.25);border-radius:6px;padding:3px 8px;margin-left:8px;vertical-align:middle;font-family:'DM Mono',monospace">admin</span></div>
+        <div style="color:var(--muted);font-size:12px;margin-top:4px">Scheduled email sync panel</div>
+      </div>
+      <button class="btn btn-ghost" onclick="showAdminScreen('gate-back')">← Tasks</button>
+    </div>
+
+    <div id="admin-panel-notice"></div>
+
+    <!-- Token -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px">① GitHub Personal Access Token</div>
+      <div style="color:var(--muted);font-size:11px;margin-bottom:14px;line-height:1.6">
+        Required to sync tasks to GitHub. Create one at <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--accent)">github.com/settings/tokens</a> — enable the <strong style="color:var(--text)">repo</strong> scope. Stored only in your browser.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="margin-bottom:0;flex:1">
+        <button class="btn btn-ghost" style="white-space:nowrap" onclick="saveToken()">Save Token</button>
+      </div>
+      <div id="token-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+    </div>
+
+    <!-- Schedule toggle -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px">② Daily 7am Email (MT)</div>
+          <div style="color:var(--muted);font-size:11px;margin-top:2px">GitHub Actions sends the email every morning at 7am Mountain Time.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="schedule-toggle" onchange="toggleSchedule()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="schedule-on" class="hidden" style="margin-top:12px">
+        <label>Email Address for Morning Reminder</label>
+        <input type="text" id="sched-email" placeholder="you@example.com" style="margin-bottom:0">
+      </div>
+    </div>
+
+    <!-- Sync -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px">③ Sync Tasks to GitHub</div>
+      <div style="color:var(--muted);font-size:11px;margin-bottom:12px;line-height:1.6">Pushes your task list to <code style="color:var(--accent)">tasks.json</code> in your repo. GitHub Actions reads this each morning.</div>
+      <div id="admin-task-preview" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--muted);margin-bottom:14px;max-height:160px;overflow-y:auto;white-space:pre-wrap;line-height:1.8">Loading…</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="syncTasks()">Sync Tasks Now</button>
+        <button class="btn btn-ghost" onclick="refreshAdminPreview()">Refresh</button>
+      </div>
+    </div>
+
+    <div style="color:var(--muted);font-size:11px;line-height:1.7">
+      💡 Re-sync whenever you add or edit tasks so the morning email stays accurate.
+    </div>
+  </div>
 
 </div>
 
@@ -908,12 +983,126 @@ document.addEventListener('keydown', e => {
     if (!document.getElementById('view-login').classList.contains('hidden') && document.activeElement.closest('#view-login')) doLogin();
     if (!document.getElementById('view-signup').classList.contains('hidden') && document.activeElement.closest('#view-signup')) doSignup();
     if (!document.getElementById('edit-overlay').classList.contains('hidden')) saveEdit();
+    if (!document.getElementById('screen-admin-gate').classList.contains('hidden')) doAdminLogin();
   }
 });
 
 document.getElementById('edit-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('edit-overlay')) closeEdit();
 });
+
+// ── Admin routing ──
+const ADMIN_USER   = 'jbug';
+const GITHUB_OWNER = 'Jbugness2';
+const GITHUB_REPO  = 'Jbugness2';
+const TOKEN_KEY    = 'taskr_gh_token';
+
+function showAdminScreen(which) {
+  ['screen-auth','screen-dash','screen-admin-gate','screen-admin-panel'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+  if (which === 'gate') {
+    document.getElementById('screen-admin-gate').classList.remove('hidden');
+    history.replaceState(null,'','#admin');
+  } else if (which === 'panel') {
+    document.getElementById('screen-admin-panel').classList.remove('hidden');
+    history.replaceState(null,'','#admin');
+    initAdminPanel();
+  } else {
+    history.replaceState(null,'',location.pathname);
+    if (currentUser) document.getElementById('screen-dash').classList.remove('hidden');
+    else document.getElementById('screen-auth').classList.remove('hidden');
+  }
+}
+
+window.addEventListener('load', () => {
+  if (location.hash === '#admin') showAdminScreen('gate');
+});
+
+function doAdminLogin() {
+  const u = document.getElementById('admin-gate-user').value.trim();
+  const p = document.getElementById('admin-gate-pass').value;
+  const user = getUser(u);
+  if (!user || user.password !== p) { setNotice('admin-gate-notice','Invalid username or password.','error'); return; }
+  if (u !== ADMIN_USER) { setNotice('admin-gate-notice','This panel is admin-only.','error'); return; }
+  currentUser = u;
+  showAdminScreen('panel');
+}
+
+function initAdminPanel() {
+  if (getToken()) document.getElementById('token-status').textContent = '✓ Token already saved';
+  const data = getUser(currentUser);
+  const sched = data.schedSettings || {};
+  document.getElementById('schedule-toggle').checked = !!sched.enabled;
+  document.getElementById('sched-email').value = sched.email || data.emailSettings?.address || '';
+  document.getElementById('schedule-on').classList.toggle('hidden', !sched.enabled);
+  refreshAdminPreview();
+}
+
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+
+function saveToken() {
+  const t = document.getElementById('gh-token').value.trim();
+  if (!t) { document.getElementById('token-status').textContent = 'Enter a token first.'; return; }
+  localStorage.setItem(TOKEN_KEY, t);
+  document.getElementById('token-status').textContent = '✓ Token saved';
+  document.getElementById('gh-token').value = '';
+}
+
+function toggleSchedule() {
+  document.getElementById('schedule-on').classList.toggle('hidden', !document.getElementById('schedule-toggle').checked);
+  saveSchedPrefs();
+}
+
+function saveSchedPrefs() {
+  const db = getDB();
+  if (!db[currentUser]) return;
+  db[currentUser].schedSettings = {
+    enabled: document.getElementById('schedule-toggle').checked,
+    email: document.getElementById('sched-email').value.trim(),
+  };
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+function refreshAdminPreview() {
+  const data = getUser(currentUser);
+  const tasks = Object.entries(data.tasks || {});
+  document.getElementById('admin-task-preview').textContent =
+    tasks.length ? tasks.map(([n,d]) => `• ${n}  →  ${d}`).join('\n') : 'No tasks found.';
+}
+
+async function syncTasks() {
+  const token = getToken();
+  if (!token) { setNotice('admin-panel-notice','Save your GitHub token first.','error'); return; }
+  const schedOn = document.getElementById('schedule-toggle').checked;
+  const schedEmail = document.getElementById('sched-email').value.trim();
+  if (schedOn && !schedEmail) { setNotice('admin-panel-notice','Enter an email address for the morning reminder.','error'); return; }
+  saveSchedPrefs();
+
+  const data = getUser(currentUser);
+  const payload = {
+    username: currentUser, email: schedEmail, scheduleEnabled: schedOn,
+    tasks: Object.entries(data.tasks || {}).map(([name,date]) => ({ name, date })),
+    lastSynced: new Date().toISOString(),
+  };
+
+  setNotice('admin-panel-notice','Syncing to GitHub…','info');
+  try {
+    const headers = { 'Authorization':`token ${token}`, 'Accept':'application/vnd.github.v3+json', 'Content-Type':'application/json' };
+    let sha = null;
+    const getResp = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/tasks.json`, { headers });
+    if (getResp.ok) sha = (await getResp.json()).sha;
+    const body = { message:`sync: tasks.json [${new Date().toLocaleString()}]`, content: btoa(unescape(encodeURIComponent(JSON.stringify(payload,null,2)))) };
+    if (sha) body.sha = sha;
+    const putResp = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/tasks.json`, { method:'PUT', headers, body:JSON.stringify(body) });
+    if (putResp.ok) {
+      setNotice('admin-panel-notice','✓ Synced! GitHub will use this for the morning email.','success');
+      refreshAdminPreview();
+    } else {
+      const err = await putResp.json();
+      setNotice('admin-panel-notice',`GitHub error: ${err.message}`,'error');
+    }
+  } catch(e) { setNotice('admin-panel-notice',`Network error: ${e.message}`,'error'); }
+}
 </script>
 </body>
 </html>
