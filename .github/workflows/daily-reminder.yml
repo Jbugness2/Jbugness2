@@ -1,0 +1,119 @@
+name: Daily Task Reminder
+
+on:
+  schedule:
+    - cron: '0 14 * * *'  # 2:00 UTC = 7:00 AM Mountain Time
+  workflow_dispatch:       # allows manual trigger from GitHub Actions tab
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Check tasks.json exists
+        id: check
+        run: |
+          if [ -f tasks.json ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "tasks.json not found — skipping email."
+          fi
+
+      - name: Read tasks and send email
+        if: steps.check.outputs.exists == 'true'
+        env:
+          EMAILJS_SERVICE_ID:  ${{ secrets.EMAILJS_SERVICE_ID }}
+          EMAILJS_TEMPLATE_ID: ${{ secrets.EMAILJS_TEMPLATE_ID }}
+          EMAILJS_PUBLIC_KEY:  ${{ secrets.EMAILJS_PUBLIC_KEY }}
+        run: |
+          python3 - <<'EOF'
+          import json
+          import urllib.request
+          import urllib.parse
+          import os
+          from datetime import datetime, timezone, timedelta
+
+          # Load tasks
+          with open("tasks.json") as f:
+              data = json.load(f)
+
+          if not data.get("scheduleEnabled"):
+              print("Scheduled emails disabled — skipping.")
+              exit(0)
+
+          email_addr = data.get("email", "")
+          if not email_addr:
+              print("No email address set — skipping.")
+              exit(0)
+
+          username = data.get("username", "there")
+          tasks    = data.get("tasks", [])
+
+          # Get today in MT (UTC-7)
+          mt_now  = datetime.now(timezone.utc) - timedelta(hours=7)
+          today   = mt_now.date()
+
+          # Filter tasks due within 3 days (including overdue)
+          upcoming = []
+          for t in tasks:
+              raw = t.get("date", "")
+              try:
+                  # Handle both YYYY-MM-DD and DD-MM-YYYY
+                  if len(raw) == 10 and raw[4] == "-":
+                      due = datetime.strptime(raw, "%Y-%m-%d").date()
+                  else:
+                      due = datetime.strptime(raw, "%d-%m-%Y").date()
+              except ValueError:
+                  continue
+
+              diff = (due - today).days
+              if diff <= 3:
+                  if diff < 0:
+                      label = f"OVERDUE ({abs(diff)} day{'s' if abs(diff)!=1 else ''} ago)"
+                  elif diff == 0:
+                      label = "Due TODAY"
+                  elif diff == 1:
+                      label = "Due TOMORROW"
+                  else:
+                      label = f"Due in {diff} days ({due.strftime('%b %d')})"
+                  upcoming.append(f"• {t['name']} — {label}")
+
+          if not upcoming:
+              print("No tasks due within 3 days — skipping email.")
+              exit(0)
+
+          task_list  = "\n".join(upcoming)
+          date_label = mt_now.strftime("%A, %B %d, %Y")
+
+          # Send via EmailJS REST API
+          payload = json.dumps({
+              "service_id":  os.environ["EMAILJS_SERVICE_ID"],
+              "template_id": os.environ["EMAILJS_TEMPLATE_ID"],
+              "user_id":     os.environ["EMAILJS_PUBLIC_KEY"],
+              "template_params": {
+                  "name":      username,
+                  "username":  username,
+                  "time":      date_label,
+                  "message":   "Here are your tasks due within the next 3 days:",
+                  "task_list": task_list,
+                  "to_email":  email_addr,
+              }
+          }).encode()
+
+          req = urllib.request.Request(
+              "https://api.emailjs.com/api/v1.0/email/send",
+              data=payload,
+              headers={"Content-Type": "application/json", "origin": "http://localhost"},
+          )
+
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  print(f"Email sent! Status: {resp.status}")
+          except urllib.error.HTTPError as e:
+              print(f"EmailJS error {e.code}: {e.read().decode()}")
+              exit(1)
+          EOF
