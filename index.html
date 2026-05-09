@@ -327,12 +327,12 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, si
 import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: os.getenv('FIREBASE_APIKEY'),
-  authDomain: os.getenv('FIREBASE_AUTHDOMAIN'),
-  projectId: os.getenv('FIREBASE_PROJECTID'),
-  storageBucket: os.getenv('FIREBASE_STORAGEBUCKET'),
-  messagingSenderId: os.getenv('FIREBASE_MESSAGINGSENDERID'),
-  appId: os.getenv('FIREBASE_APPID'),
+  apiKey: "AIzaSyC1VIWuWwiOIPNTdzLyK5Ge8Q_QboZfjAU",
+  authDomain: "taskr-abe60.firebaseapp.com",
+  projectId: "taskr-abe60",
+  storageBucket: "taskr-abe60.firebasestorage.app",
+  messagingSenderId: "636132275686",
+  appId: "1:636132275686:web:4ab50ee7f1e8a4a14a1227",
 };
 const fbApp = initializeApp(firebaseConfig);
 const auth  = getAuth(fbApp);
