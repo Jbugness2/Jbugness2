@@ -111,7 +111,7 @@ jobs:
             req = urllib.request.Request(
                 "https://api.emailjs.com/api/v1.0/email/send",
                 data=payload,
-                headers={"Content-Type": "application/json", "origin": "http://localhost"},
+                headers={"Content-Type": "application/json", "Origin": "https://www.emailjs.com"},
             )
 
             try:
