@@ -575,7 +575,7 @@ select { cursor:pointer; }
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, where, orderBy, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, where, orderBy, getDocs, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC1VIWuWwiOIPNTdzLyK5Ge8Q_QboZfjAU",
@@ -1700,33 +1700,32 @@ async function mergeStickies(dragId, targetId) {
   const target  = stickies.find(s=>s.id===targetId);
   if (!dragged||!target) return;
 
-  // collect all notes being dragged (the whole stack if dragged is stacked, otherwise just itself)
+  // collect all notes being dragged (whole stack or just itself)
   const dragGroup = dragged.stackId
     ? stickies.filter(s=>s.stackId===dragged.stackId)
     : [dragged];
 
-  // determine the destination stack id
+  // determine destination stack and base order
   let destStackId;
   let baseOrder;
   if (target.stackId) {
-    // target is already in a stack — join it
     destStackId = target.stackId;
     const destNotes = stickies.filter(s=>s.stackId===destStackId);
     baseOrder = Math.max(...destNotes.map(s=>s.stackOrder||0)) + 1;
   } else {
-    // target is a lone note — create a new stack, target gets order 0
     destStackId = `stack_${Date.now()}`;
-    await updateDoc(doc(db,'users',currentUser.uid,'stickies',targetId),{stackId:destStackId, stackOrder:0});
     baseOrder = 1;
   }
 
-  // move every note in the drag group into the destination stack
-  for (let i = 0; i < dragGroup.length; i++) {
-    await updateDoc(doc(db,'users',currentUser.uid,'stickies',dragGroup[i].id),{
-      stackId: destStackId,
-      stackOrder: baseOrder + i
-    });
+  // batch all writes so onSnapshot fires exactly once
+  const batch = writeBatch(db);
+  if (!target.stackId) {
+    batch.update(doc(db,'users',currentUser.uid,'stickies',targetId), {stackId:destStackId, stackOrder:0});
   }
+  dragGroup.forEach((s, i) => {
+    batch.update(doc(db,'users',currentUser.uid,'stickies',s.id), {stackId:destStackId, stackOrder:baseOrder+i});
+  });
+  await batch.commit();
 }
 function makeResizable(el, handle, id, type) {
   handle.addEventListener('mousedown', e => {
