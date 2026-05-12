@@ -123,7 +123,7 @@ select { cursor:pointer; }
   border: 1px solid rgba(255,255,255,.08); transition: box-shadow .2s;
 }
 .sticky-note.themed {
-  background: var(--surface) !important; color: var(--text) !important;
+  background: rgba(23,23,28,1); color: var(--text) !important;
   border: 1px solid var(--border) !important;
 }
 .sticky-note.themed .sticky-body { color: var(--text) !important; }
@@ -1047,8 +1047,12 @@ function renderAllStickies() {
     if (s) createStickyDOM(s, themed, stackId, idx, ids.length);
   });
   // re-apply sticky opacity after every render since DOM was rebuilt
-  const stickyOp = userProfile?.theme?.opacity?.sticky;
-  if (stickyOp !== undefined) applyOneOpacity('sticky', stickyOp / 100);
+  // use the live slider value if the customize panel is open, otherwise fall back to saved
+  const stickySlider = document.getElementById('op-sticky');
+  const stickyOp = stickySlider
+    ? parseInt(stickySlider.value) / 100
+    : (userProfile?.theme?.opacity?.sticky ?? 100) / 100;
+  applyOneOpacity('sticky', stickyOp);
 }
 
 function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
@@ -1056,9 +1060,9 @@ function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
   const el = document.createElement('div');
   el.className = 'sticky-note' + (themed||s.themed ? ' themed' : '');
   el.id = `sticky-${s.id}`;
-  const stickyColor = (!themed&&!s.themed) ? s.color : '';
-  el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px;`;
-  if (stickyColor) { el.style.backgroundColor = stickyColor; el.dataset.baseColor = stickyColor; }
+  const stickyColor = (!themed&&!s.themed) ? (s.color||'') : '';
+  el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px;${stickyColor?`background-color:${stickyColor};`:''}`;
+  if (stickyColor) el.setAttribute('data-base-color', stickyColor);
   const isStacked = stackId !== null && stackLen > 1;
   const stackNav = isStacked ? `
     <div class="sticky-footer">
@@ -1390,15 +1394,25 @@ window.previewOpacity = function(key, val) {
   applyOneOpacity(key, val / 100);
 };
 
+function getLiveOpacity(key) {
+  const slider = document.getElementById(`op-${key}`);
+  return slider ? parseInt(slider.value) / 100 : 1;
+}
+
 function applyOneOpacity(key, frac) {
   if (key === 'sticky') {
-    document.querySelectorAll('.sticky-note').forEach(s => {
-      const base = s.dataset.baseColor; // always original hex set in createStickyDOM
-      if (!base) return; // themed notes have no base color, skip
-      const hex = base.match(/^#([0-9a-f]{6})$/i);
-      if (!hex) return;
-      const r=parseInt(hex[1].slice(0,2),16), g=parseInt(hex[1].slice(2,4),16), b=parseInt(hex[1].slice(4,6),16);
-      s.style.backgroundColor = `rgba(${r},${g},${b},${frac})`;
+    document.querySelectorAll('.sticky-note').forEach(el => {
+      const base = el.getAttribute('data-base-color');
+      if (base) {
+        // colored note — fade background only
+        const hex = base.match(/^#([0-9a-f]{6})$/i);
+        if (!hex) return;
+        const r=parseInt(hex[1].slice(0,2),16), g=parseInt(hex[1].slice(2,4),16), b=parseInt(hex[1].slice(4,6),16);
+        el.style.backgroundColor = `rgba(${r},${g},${b},${frac})`;
+      } else {
+        // themed note — uses --surface color (23,23,28), fade background only
+        el.style.backgroundColor = `rgba(23,23,28,${frac})`;
+      }
     });
   } else {
     document.documentElement.style.setProperty(`--op-${key}`, frac);
