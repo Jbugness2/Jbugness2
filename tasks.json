@@ -4,16 +4,8 @@
   "scheduleEnabled": true,
   "tasks": [
     {
-      "name": "Auto_sync",
-      "date": "2026-05-31"
-    },
-    {
       "name": "Spanish_Final",
       "date": "2026-05-14"
-    },
-    {
-      "name": "Friends page?",
-      "date": "2026-05-31"
     },
     {
       "name": "Junior_Capstone",
@@ -24,22 +16,6 @@
       "date": "2026-05-14"
     },
     {
-      "name": "Writing#3",
-      "date": "2026-05-12"
-    },
-    {
-      "name": "Customization_menu",
-      "date": "2026-05-31"
-    },
-    {
-      "name": "Gittoken_Security",
-      "date": "2026-05-31"
-    },
-    {
-      "name": "Task_sharing",
-      "date": "2026-05-31"
-    },
-    {
       "name": "English_Project",
       "date": "2026-05-18"
     },
@@ -48,13 +24,17 @@
       "date": "2026-05-13"
     },
     {
-      "name": "Make_Stickynote_function",
-      "date": "2026-05-31"
+      "name": "Geo_Project",
+      "date": "2026-05-20"
+    },
+    {
+      "name": "Study_for_Math",
+      "date": "2026-05-12"
     },
     {
       "name": "Spanish_Charla",
       "date": "2026-05-08"
     }
   ],
-  "lastSynced": "2026-05-12T14:08:31.560Z"
+  "lastSynced": "2026-05-12T18:49:35.422Z"
 }
