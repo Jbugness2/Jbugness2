@@ -4,8 +4,16 @@
   "scheduleEnabled": true,
   "tasks": [
     {
+      "name": "Auto_sync",
+      "date": "2026-05-31"
+    },
+    {
       "name": "Spanish_Final",
       "date": "2026-05-14"
+    },
+    {
+      "name": "Friends page?",
+      "date": "2026-05-31"
     },
     {
       "name": "CS_Test",
@@ -16,8 +24,16 @@
       "date": "2026-05-12"
     },
     {
-      "name": "Astro_project",
-      "date": "2026-05-10"
+      "name": "Customization_menu",
+      "date": "2026-05-31"
+    },
+    {
+      "name": "Gittoken_Security",
+      "date": "2026-05-31"
+    },
+    {
+      "name": "Task_sharing",
+      "date": "2026-05-31"
     },
     {
       "name": "English_Project",
@@ -28,9 +44,13 @@
       "date": "2026-05-13"
     },
     {
+      "name": "Make_Stickynote_function",
+      "date": "2026-05-31"
+    },
+    {
       "name": "Spanish_Charla",
       "date": "2026-05-08"
     }
   ],
-  "lastSynced": "2026-05-08T23:40:20.467Z"
+  "lastSynced": "2026-05-12T04:19:33.156Z"
 }
