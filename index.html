@@ -1632,7 +1632,8 @@ window.closeLogout=function(){document.getElementById('logout-overlay').classLis
 function makeDraggable(el, handle, id, type) {
   let sx,sy,ex,ey;
   handle.addEventListener('mousedown', e => {
-    if (e.target.tagName==='BUTTON'||e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT') return;
+    if (e.target.tagName==='BUTTON'||e.target.tagName==='TEXTAREA') return;
+    if (e.target.tagName==='INPUT' && !e.target.hasAttribute('readonly')) return;
     e.preventDefault();
     sx=e.clientX-el.offsetLeft; sy=e.clientY-el.offsetTop;
 
