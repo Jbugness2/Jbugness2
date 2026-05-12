@@ -71,6 +71,7 @@ select { cursor:pointer; }
 #task-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
 .task-item { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; transition:border-color .18s; }
 .task-item:hover { border-color:var(--muted); }
+.task-item.selected-task { border-color:var(--accent); background:rgba(200,240,74,.06); }
 .task-info { flex:1; min-width:0; }
 .task-name { font-weight:500; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:3px; }
 .task-date { font-size:11px; color:var(--muted); }
@@ -110,18 +111,36 @@ select { cursor:pointer; }
 
 /* ── Sticky Notes ── */
 .sticky-note {
-  position: fixed; z-index: 150; min-width: 180px; min-height: 120px;
-  border-radius: 12px; padding: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.4);
-  display: flex; flex-direction: column; gap: 6px; cursor: default;
-  border: 1px solid rgba(255,255,255,.08);
+  position: fixed; z-index: 150; min-width: 180px; min-height: 140px;
+  border-radius: 12px; padding: 10px 12px 8px; box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  display: flex; flex-direction: column; gap: 4px; cursor: default;
+  border: 1px solid rgba(255,255,255,.08); transition: box-shadow .2s;
 }
-.sticky-header { display:flex; align-items:center; justify-content:space-between; cursor:move; user-select:none; padding-bottom:6px; border-bottom:1px solid rgba(0,0,0,.15); }
-.sticky-title { font-family:'Syne',sans-serif; font-size:12px; font-weight:700; opacity:.8; }
-.sticky-body { flex:1; background:transparent; border:none; outline:none; font-size:13px; color:#000; font-family:var(--font-ui); resize:none; min-height:60px; line-height:1.6; padding:0; width:100%; margin-bottom:0; }
+.sticky-note.themed {
+  background: var(--surface) !important; color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+.sticky-note.themed .sticky-body { color: var(--text) !important; }
+.sticky-note.themed .sticky-title-input { color: var(--text) !important; }
+.sticky-note.themed .sticky-btn { background: var(--surface2) !important; color: var(--muted) !important; }
+.sticky-note.themed .sticky-btn:hover { color: var(--text) !important; }
+.sticky-header { display:flex; align-items:center; justify-content:space-between; cursor:move; user-select:none; padding-bottom:5px; border-bottom:1px solid rgba(0,0,0,.12); gap:6px; }
+.sticky-title-input {
+  font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
+  background: transparent; border: none; outline: none; flex:1;
+  min-width: 0; color: #000; padding: 0; cursor: text;
+}
+.sticky-title-input::placeholder { opacity: .5; }
+.sticky-body { flex:1; background:transparent; border:none; outline:none; font-size:12px; color:#000; font-family:var(--font-ui); resize:none; min-height:50px; line-height:1.6; padding:0; width:100%; margin-bottom:0; }
 .sticky-resize { width:14px; height:14px; background:rgba(0,0,0,.2); border-radius:3px; cursor:se-resize; align-self:flex-end; flex-shrink:0; }
-.sticky-actions { display:flex; gap:4px; }
-.sticky-btn { background:rgba(0,0,0,.15); border:none; border-radius:6px; padding:3px 7px; font-size:11px; cursor:pointer; color:#000; font-family:var(--font-ui); }
-.sticky-btn:hover { background:rgba(0,0,0,.25); }
+.sticky-actions { display:flex; gap:4px; flex-shrink:0; }
+.sticky-btn { background:rgba(0,0,0,.12); border:none; border-radius:6px; padding:2px 6px; font-size:11px; cursor:pointer; color:#333; font-family:var(--font-ui); transition: background .15s; }
+.sticky-btn:hover { background:rgba(0,0,0,.22); }
+.sticky-footer { display:flex; align-items:center; justify-content:space-between; padding-top:4px; border-top:1px solid rgba(0,0,0,.1); font-size:10px; color:rgba(0,0,0,.4); min-height:20px; }
+.sticky-nav { display:flex; gap:4px; align-items:center; }
+.sticky-nav button { background:rgba(0,0,0,.1); border:none; border-radius:4px; padding:1px 6px; font-size:11px; cursor:pointer; color:#333; }
+.sticky-nav button:hover { background:rgba(0,0,0,.2); }
+.sticky-stack-indicator { font-size:10px; opacity:.6; }
 
 #sticky-container { position:fixed; inset:0; pointer-events:none; z-index:150; }
 #sticky-container .sticky-note { pointer-events:all; }
@@ -224,6 +243,7 @@ select { cursor:pointer; }
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-icon" title="Add task" onclick="toggleAddForm()">＋</button>
+        <button class="btn btn-icon" title="Select tasks" id="select-mode-btn" onclick="toggleSelectMode()">☑ Select</button>
         <button class="btn btn-icon" title="Sticky note" onclick="addStickyNote()">📌</button>
         <button class="btn btn-icon" title="Friends" onclick="openFriendsWindow()" style="position:relative">👥<span id="friend-notif" class="notif-badge hidden"></span></button>
         <button class="btn btn-icon" title="Customize" onclick="openCustomize()">🎨</button>
@@ -243,6 +263,16 @@ select { cursor:pointer; }
       </div>
     </div>
     <div id="add-notice"></div>
+
+    <!-- Bulk action bar -->
+    <div id="bulk-action-bar" class="hidden" style="background:var(--surface2);border:1px solid var(--accent);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="bulk-count" style="flex:1;font-size:12px;color:var(--accent);font-weight:600"></span>
+      <button class="btn-accent-sm" onclick="selectAll()">All</button>
+      <button class="win-btn" onclick="deselectAll()">None</button>
+      <button class="btn-accent-sm" onclick="bulkShare()">📤 Share</button>
+      <button class="win-btn" style="color:var(--danger)" onclick="bulkDelete()">🗑 Delete</button>
+    </div>
+
     <div id="task-list"></div>
   </div>
 
@@ -355,7 +385,7 @@ select { cursor:pointer; }
 
   <!-- Customize Modal -->
   <div id="customize-overlay" class="overlay hidden">
-    <div class="modal" style="max-width:600px;width:100%">
+    <div class="modal" style="max-width:640px;width:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
         <h3 style="margin-bottom:0">Customize</h3>
         <button class="btn btn-icon" style="font-size:14px;padding:6px 10px" onclick="closeCustomize()">✕</button>
@@ -380,11 +410,43 @@ select { cursor:pointer; }
         <!-- Font -->
         <div class="section-box" style="grid-column:1/-1">
           <div class="section-title">Font</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
             <button class="btn btn-ghost btn-sm" onclick="setFont('DM Mono')" style="font-family:'DM Mono',monospace">DM Mono (default)</button>
             <button class="btn btn-ghost btn-sm" onclick="setFont('Inter')" style="font-family:'Inter',sans-serif">Inter</button>
             <button class="btn btn-ghost btn-sm" onclick="setFont('Playfair Display')" style="font-family:'Playfair Display',serif">Playfair</button>
             <button class="btn btn-ghost btn-sm" onclick="setFont('system-ui')" style="font-family:system-ui">System UI</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:12px;font-weight:600">Sticky Notes Follow Theme</div>
+              <div style="font-size:11px;color:var(--muted)">Makes all stickies use the app's dark theme instead of colors</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="sticky-theme-toggle" onchange="toggleGlobalStickyTheme(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <!-- Opacity -->
+        <div class="section-box" style="grid-column:1/-1">
+          <div class="section-title">Opacity</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div>
+              <label>Task Panel <span id="op-task-val" style="color:var(--accent)">100%</span></label>
+              <input type="range" id="op-task" min="20" max="100" value="100" style="width:100%;padding:0;background:transparent;border:none;margin-bottom:10px;accent-color:var(--accent)" oninput="previewOpacity('task',this.value)">
+              <label>Sticky Notes <span id="op-sticky-val" style="color:var(--accent)">100%</span></label>
+              <input type="range" id="op-sticky" min="20" max="100" value="100" style="width:100%;padding:0;background:transparent;border:none;margin-bottom:10px;accent-color:var(--accent)" oninput="previewOpacity('sticky',this.value)">
+              <label>Modals <span id="op-modal-val" style="color:var(--accent)">100%</span></label>
+              <input type="range" id="op-modal" min="20" max="100" value="100" style="width:100%;padding:0;background:transparent;border:none;margin-bottom:0;accent-color:var(--accent)" oninput="previewOpacity('modal',this.value)">
+            </div>
+            <div>
+              <label>Friend Window <span id="op-friends-val" style="color:var(--accent)">100%</span></label>
+              <input type="range" id="op-friends" min="20" max="100" value="100" style="width:100%;padding:0;background:transparent;border:none;margin-bottom:10px;accent-color:var(--accent)" oninput="previewOpacity('friends',this.value)">
+              <label>Chat Window <span id="op-chat-val" style="color:var(--accent)">100%</span></label>
+              <input type="range" id="op-chat" min="20" max="100" value="100" style="width:100%;padding:0;background:transparent;border:none;margin-bottom:10px;accent-color:var(--accent)" oninput="previewOpacity('chat',this.value)">
+              <label>Navigation Bar <span id="op-nav-val" style="color:var(--accent)">100%</span></label>
+              <input type="range" id="op-nav" min="20" max="100" value="100" style="width:100%;padding:0;background:transparent;border:none;margin-bottom:0;accent-color:var(--accent)" oninput="previewOpacity('nav',this.value)">
+            </div>
           </div>
         </div>
       </div>
@@ -434,13 +496,27 @@ select { cursor:pointer; }
       <div id="token-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
     </div>
     <div style="color:var(--muted);font-size:11px;line-height:1.7">💡 Tasks auto-sync on every change. Token is stored securely in Firebase.</div>
+
+    <div class="section-box" style="margin-top:12px">
+      <div class="section-title">④ Chat Word Filter</div>
+      <div style="color:var(--muted);font-size:11px;margin-bottom:12px;line-height:1.6">
+        Custom blocked words/phrases (one per line). These are added on top of the built-in filter.
+        Messages containing these are silently blocked for all users.
+      </div>
+      <textarea id="blocked-words-input" rows="5" placeholder="e.g.&#10;badword&#10;bad phrase&#10;another word" style="margin-bottom:8px;font-size:12px"></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="saveBlockedWords()">Save Filter</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadBlockedWordsToAdmin()">Load Current</button>
+      </div>
+      <div id="filter-notice" style="margin-top:8px"></div>
+    </div>
   </div>
 
   <!-- Friends Window (draggable) -->
   <div id="friends-window" class="draggable-window hidden" style="width:320px;height:460px;top:80px;right:30px">
-    <div class="window-header" id="friends-header">
-      <span class="window-title">👥 Friends</span>
-      <div class="window-controls">
+    <div class="window-header" id="friends-header" style="flex-wrap:wrap;gap:6px;padding:10px 12px">
+      <span class="window-title" style="flex:1;min-width:0">👥 Friends</span>
+      <div class="window-controls" style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="win-btn" onclick="switchFriendsTab('friends')">Friends</button>
         <button class="win-btn" onclick="switchFriendsTab('requests')">Requests <span id="req-count"></span></button>
         <button class="win-btn" onclick="switchFriendsTab('add')">＋ Add</button>
@@ -463,10 +539,11 @@ select { cursor:pointer; }
 
   <!-- Chat Window (draggable) -->
   <div id="chat-window" class="draggable-window hidden" style="width:300px;height:400px;bottom:80px;right:30px;top:auto">
-    <div class="window-header" id="chat-header">
-      <span class="window-title" id="chat-title">💬 Chat</span>
-      <div class="window-controls">
-        <button class="win-btn" onclick="closeChatWindow()">✕</button>
+    <div class="window-header" id="chat-header" style="flex-wrap:wrap;gap:6px;padding:10px 12px">
+      <span class="window-title" id="chat-title" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">💬 Chat</span>
+      <div class="window-controls" style="display:flex;gap:4px;flex-shrink:0">
+        <button class="win-btn" onclick="clearChat()" title="Clear chat history" style="padding:3px 7px;font-size:12px">🗑</button>
+        <button class="win-btn" onclick="closeChatWindow()" style="padding:3px 7px;font-size:12px">✕</button>
       </div>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
@@ -522,7 +599,9 @@ let stickiesUnsub = null;
 let friendsUnsub = null;
 let reqUnsub     = null;
 let syncTimeout  = null;
-let unreadChats  = new Set(); // tracks which friend UIDs have unread messages
+let unreadChats  = new Set();
+let selectMode   = false;
+let selectedIds  = new Set(); // tracks which friend UIDs have unread messages
 
 // ── Auth state ──
 onAuthStateChanged(auth, async user => {
@@ -543,6 +622,7 @@ onAuthStateChanged(auth, async user => {
     subscribeToStickies(user.uid);
     subscribeToFriends(user.uid);
     subscribeToRequests(user.uid);
+    await loadBlockedWords();
     showScreen('dash');
     if (userProfile?.username === ADMIN_USERNAME)
       document.getElementById('admin-btn').classList.remove('hidden');
@@ -695,26 +775,94 @@ function renderDash() {
   document.getElementById('dash-summary').innerHTML = parts.join(' · ');
   const list = document.getElementById('task-list');
   if (!sorted.length) { list.innerHTML=`<div class="empty-state"><div class="big">📋</div>No tasks yet — hit ＋ to add one.</div>`; return; }
+
+  // Update select button appearance
+  const selBtn = document.getElementById('select-mode-btn');
+  if (selBtn) selBtn.textContent = selectMode ? '✕ Cancel' : '☑ Select';
+
+  // Bulk action bar
+  const bar = document.getElementById('bulk-action-bar');
+  if (bar) {
+    if (selectMode) {
+      bar.classList.remove('hidden');
+      document.getElementById('bulk-count').textContent = selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select tasks';
+    } else {
+      bar.classList.add('hidden');
+      selectedIds.clear();
+    }
+  }
+
   list.innerHTML = sorted.map(t => {
     const d = parseDate(t.date), diffMs = d-today, diffDays = Math.round(diffMs/86400000);
     const urgClass = diffMs<0?'urgency-overdue':diffMs<=3*86400000?'urgency-soon':'urgency-normal';
     const label = formatDateLabel(d,today);
     const [dl,dc] = diffDays<0?[`${Math.abs(diffDays)}d ago`,'var(--danger)']:diffDays===0?['today','#f0c040']:diffDays===1?['1d','#f0c040']:[`${diffDays}d`,'var(--muted)'];
     const shared = t.sharedFrom ? `<span class="shared-badge">shared</span>` : '';
-    return `<div class="task-item">
+    const checked = selectedIds.has(t.id);
+    const checkbox = selectMode ? `<input type="checkbox" ${checked?'checked':''} onchange="toggleSelectTask('${t.id}',this.checked)" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;margin-bottom:0;background:transparent;border:none;padding:0">` : '';
+    return `<div class="task-item ${selectMode&&checked?'selected-task':''}" onclick="${selectMode?`toggleSelectTask('${t.id}',!document.querySelector('#cb-${t.id}').checked)`:''}" style="${selectMode?'cursor:pointer':''}">
+      ${checkbox ? `<input type="checkbox" id="cb-${t.id}" ${checked?'checked':''} onchange="toggleSelectTask('${t.id}',this.checked)" onclick="event.stopPropagation()" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;margin-bottom:0;background:transparent;border:none;padding:0">` : ''}
       <div class="task-urgency ${urgClass}"></div>
       <div class="task-info"><div class="task-name">${esc(t.name)}${shared}</div><div class="task-date">${label}</div></div>
       <div style="text-align:right;flex-shrink:0;min-width:44px">
         <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:${dc}">${dl}</div>
         <div style="font-size:10px;color:var(--muted)">days left</div>
       </div>
-      <button class="btn btn-icon" style="font-size:13px" onclick="openEdit('${t.id}')">✎</button>
+      ${!selectMode ? `<button class="btn btn-icon" style="font-size:13px" onclick="openEdit('${t.id}')">✎</button>` : ''}
     </div>`;
   }).join('');
   autoSync();
 }
 
-// ── Auto-Sync ──
+// ── Select Mode ──
+window.toggleSelectMode = function() {
+  selectMode = !selectMode;
+  selectedIds.clear();
+  renderDash();
+};
+window.toggleSelectTask = function(id, checked) {
+  if (checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  // update count and checkbox without full re-render
+  const countEl = document.getElementById('bulk-count');
+  if (countEl) countEl.textContent = selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select tasks';
+  // highlight row
+  const row = document.querySelector(`[onclick*="${id}"]`)?.closest('.task-item') || document.getElementById(`cb-${id}`)?.closest('.task-item');
+  if (row) row.classList.toggle('selected-task', checked);
+  // sync checkbox state
+  const cb = document.getElementById(`cb-${id}`);
+  if (cb) cb.checked = checked;
+};
+window.selectAll = function() {
+  tasks.forEach(t => selectedIds.add(t.id));
+  renderDash();
+};
+window.deselectAll = function() {
+  selectedIds.clear();
+  renderDash();
+};
+window.bulkDelete = async function() {
+  if (!selectedIds.size) return;
+  if (!confirm(`Delete ${selectedIds.size} task${selectedIds.size>1?'s':''}?`)) return;
+  await Promise.all([...selectedIds].map(id => deleteDoc(doc(db,'users',currentUser.uid,'tasks',id))));
+  selectedIds.clear();
+  selectMode = false;
+  renderDash();
+};
+window.bulkShare = function() {
+  if (!selectedIds.size) return;
+  if (!friends.length) { alert('You have no friends yet!'); return; }
+  // Store selected IDs for bulk share, reuse share modal
+  sharingTaskId = [...selectedIds]; // array for bulk
+  const sel = document.getElementById('share-friend-select');
+  sel.innerHTML = friends.map(f => {
+    const friendUid = f.users.find(u=>u!==currentUser.uid);
+    const name = f.usernames?.[friendUid] || (f.from===currentUser.uid ? f.toUsername : f.fromUsername);
+    return `<option value="${friendUid}">${esc(name)}</option>`;
+  }).join('');
+  clearNotice('share-notice');
+  document.getElementById('share-overlay').classList.remove('hidden');
+};
 function autoSync() {
   if (!userProfile?.schedSettings?.enabled) return;
   clearTimeout(syncTimeout);
@@ -803,13 +951,19 @@ window.openShareTask = function() {
 };
 window.closeShareTask = function() { document.getElementById('share-overlay').classList.add('hidden'); };
 window.sendTaskShare = async function() {
-  const task = tasks.find(t=>t.id===sharingTaskId); if(!task) return;
   const toUid = document.getElementById('share-friend-select').value;
-  await addDoc(collection(db,'taskShares'),{
-    from: currentUser.uid, fromUsername: userProfile.username,
-    to: toUid, task: {name:task.name, date:task.date}, status:'pending', createdAt: serverTimestamp()
-  });
-  setNotice('share-notice','Task shared!','success');
+  const ids = Array.isArray(sharingTaskId) ? sharingTaskId : [sharingTaskId];
+  const tasksToShare = ids.map(id => tasks.find(t=>t.id===id)).filter(Boolean);
+  if (!tasksToShare.length) return;
+  await Promise.all(tasksToShare.map(task =>
+    addDoc(collection(db,'taskShares'),{
+      from: currentUser.uid, fromUsername: userProfile.username,
+      to: toUid, task: {name:task.name, date:task.date}, status:'pending', createdAt: serverTimestamp()
+    })
+  ));
+  const count = tasksToShare.length;
+  setNotice('share-notice', `✓ ${count} task${count>1?'s':''} shared!`, 'success');
+  if (selectMode) { selectMode=false; selectedIds.clear(); }
   setTimeout(()=>closeShareTask(),1200);
 };
 
@@ -826,46 +980,153 @@ async function checkTaskShares() {
 }
 
 // ── Sticky Notes ──
+const STICKY_COLORS = ['#fef08a','#bbf7d0','#bfdbfe','#fecaca','#e9d5ff','#fed7aa','#a5f3fc'];
+// stacks: { stackId: [stickyId, ...] }
+let stickyStacks = {};
+let stickyActiveIndex = {}; // stackId -> current index shown
+
 window.addStickyNote = async function() {
-  const colors = ['#fef08a','#bbf7d0','#bfdbfe','#fecaca','#e9d5ff'];
-  const color  = colors[Math.floor(Math.random()*colors.length)];
+  const color = STICKY_COLORS[Math.floor(Math.random()*STICKY_COLORS.length)];
+  const themed = userProfile?.stickyThemed || false;
   await addDoc(collection(db,'users',currentUser.uid,'stickies'),{
-    content:'', color, x:120+Math.random()*200, y:120+Math.random()*200, w:220, h:160
+    title: 'Note', content:'', color, themed,
+    x: 120+Math.random()*200, y: 80+Math.random()*150, w:230, h:170,
+    stackId: null, stackOrder: 0,
   });
 };
 
-function renderAllStickies() {
-  const container = document.getElementById('sticky-container');
-  // remove old
-  container.querySelectorAll('.sticky-note').forEach(n=>n.remove());
-  stickies.forEach(s => createStickyDOM(s));
+function buildStacks() {
+  stickyStacks = {};
+  stickyActiveIndex = {};
+  stickies.forEach(s => {
+    if (s.stackId) {
+      if (!stickyStacks[s.stackId]) { stickyStacks[s.stackId] = []; stickyActiveIndex[s.stackId] = 0; }
+      stickyStacks[s.stackId].push(s.id);
+    }
+  });
+  // sort each stack by stackOrder
+  Object.keys(stickyStacks).forEach(sid => {
+    stickyStacks[sid].sort((a,b) => {
+      const sa = stickies.find(s=>s.id===a), sb = stickies.find(s=>s.id===b);
+      return (sa?.stackOrder||0) - (sb?.stackOrder||0);
+    });
+  });
 }
 
-function createStickyDOM(s) {
+function renderAllStickies() {
+  const container = document.getElementById('sticky-container');
+  container.querySelectorAll('.sticky-note').forEach(n=>n.remove());
+  buildStacks();
+  const themed = userProfile?.stickyThemed || false;
+  // render non-stacked
+  stickies.filter(s=>!s.stackId).forEach(s => createStickyDOM(s, themed));
+  // render stacked (only show active note in each stack)
+  Object.keys(stickyStacks).forEach(stackId => {
+    const ids = stickyStacks[stackId];
+    const idx = stickyActiveIndex[stackId] || 0;
+    const activeId = ids[idx];
+    const s = stickies.find(s=>s.id===activeId);
+    if (s) createStickyDOM(s, themed, stackId, idx, ids.length);
+  });
+}
+
+function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
   const container = document.getElementById('sticky-container');
   const el = document.createElement('div');
-  el.className = 'sticky-note';
+  el.className = 'sticky-note' + (themed||s.themed ? ' themed' : '');
   el.id = `sticky-${s.id}`;
-  el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px;background:${s.color}`;
+  el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px;${(!themed&&!s.themed)?`background:${s.color}`:''}`;
+  const isStacked = stackId !== null && stackLen > 1;
+  const stackNav = isStacked ? `
+    <div class="sticky-footer">
+      <div class="sticky-nav">
+        <button onclick="stickyNavPrev('${stackId}')" ${stackIdx===0?'disabled':''}>◀</button>
+        <span class="sticky-stack-indicator">${stackIdx+1}/${stackLen}</span>
+        <button onclick="stickyNavNext('${stackId}')" ${stackIdx===stackLen-1?'disabled':''}>▶</button>
+      </div>
+      <button class="sticky-btn" onclick="unstackSticky('${s.id}')" title="Remove from stack">Unstack</button>
+    </div>` : `<div class="sticky-footer"><button class="sticky-btn" onclick="stackWithNearest('${s.id}')" title="Stack with nearest note">Stack</button></div>`;
+
   el.innerHTML = `
     <div class="sticky-header">
-      <span class="sticky-title">📌 Note</span>
+      <input class="sticky-title-input" value="${esc(s.title||'Note')}" placeholder="Title…"
+        onblur="saveStickyTitle('${s.id}',this.value)"
+        onmousedown="event.stopPropagation()"
+        onclick="event.stopPropagation()">
       <div class="sticky-actions">
+        <button class="sticky-btn" onclick="toggleStickyTheme('${s.id}')" title="Toggle theme">🎨</button>
         <button class="sticky-btn" onclick="deleteStickyNote('${s.id}')">✕</button>
       </div>
     </div>
-    <textarea class="sticky-body" placeholder="Type your note…" onblur="saveStickyContent('${s.id}',this.value)">${esc(s.content||'')}</textarea>
+    <textarea class="sticky-body" placeholder="Type your note…"
+      onblur="saveStickyContent('${s.id}',this.value)"
+      onmousedown="event.stopPropagation()">${esc(s.content||'')}</textarea>
+    ${stackNav}
     <div class="sticky-resize"></div>`;
+
   container.appendChild(el);
   makeDraggable(el, el.querySelector('.sticky-header'), s.id, 'sticky');
   makeResizable(el, el.querySelector('.sticky-resize'), s.id, 'sticky');
+
+  // apply saved opacity
+  const op = userProfile?.theme?.opacity?.sticky;
+  if (op !== undefined) el.style.opacity = op / 100;
 }
 
+// Stack navigation
+window.stickyNavPrev = function(stackId) {
+  stickyActiveIndex[stackId] = Math.max(0, (stickyActiveIndex[stackId]||0) - 1);
+  renderAllStickies();
+};
+window.stickyNavNext = function(stackId) {
+  const len = stickyStacks[stackId]?.length || 1;
+  stickyActiveIndex[stackId] = Math.min(len-1, (stickyActiveIndex[stackId]||0) + 1);
+  renderAllStickies();
+};
+
+// Stack the dragged note with the nearest note
+window.stackWithNearest = async function(id) {
+  const s = stickies.find(s=>s.id===id); if(!s) return;
+  // find closest non-stacked note
+  let closest = null, minDist = Infinity;
+  stickies.filter(o=>o.id!==id&&!o.stackId).forEach(o => {
+    const dist = Math.hypot((o.x||0)-(s.x||0),(o.y||0)-(s.y||0));
+    if (dist < minDist) { minDist=dist; closest=o; }
+  });
+  if (!closest) { alert('No nearby notes to stack with!'); return; }
+  const stackId = `stack_${Date.now()}`;
+  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{stackId, stackOrder:1});
+  await updateDoc(doc(db,'users',currentUser.uid,'stickies',closest.id),{stackId, stackOrder:0});
+};
+
+// Unstack a note
+window.unstackSticky = async function(id) {
+  const s = stickies.find(s=>s.id===id); if(!s||!s.stackId) return;
+  const stackId = s.stackId;
+  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{stackId:null, stackOrder:0});
+  // if only 1 left in stack, unstack that too
+  const remaining = stickies.filter(o=>o.stackId===stackId&&o.id!==id);
+  if (remaining.length===1) {
+    await updateDoc(doc(db,'users',currentUser.uid,'stickies',remaining[0].id),{stackId:null,stackOrder:0});
+  }
+};
+
+// Toggle theme on individual note
+window.toggleStickyTheme = async function(id) {
+  const s = stickies.find(s=>s.id===id); if(!s) return;
+  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{themed:!s.themed});
+};
+
 window.deleteStickyNote = async function(id) {
+  const s = stickies.find(s=>s.id===id);
+  if (s?.stackId) await unstackSticky(id);
   await deleteDoc(doc(db,'users',currentUser.uid,'stickies',id));
 };
 window.saveStickyContent = async function(id, content) {
   await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{content});
+};
+window.saveStickyTitle = async function(id, title) {
+  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{title: title||'Note'});
 };
 
 // ── Friends ──
@@ -972,8 +1233,11 @@ window.openChat = function(friendUid, friendName) {
   activeChatFriendId = friendUid;
   document.getElementById('chat-title').textContent = `💬 ${friendName}`;
   document.getElementById('chat-window').classList.remove('hidden');
+  unreadChats.delete(friendUid);
+  renderFriendsList();
   // Build chat ID (sorted so both users get same ID)
   const chatId = [currentUser.uid, friendUid].sort().join('_');
+  maybeAutoCleanChat(chatId);
   if (chatUnsub) chatUnsub();
   chatUnsub = onSnapshot(
     query(collection(db,'chats',chatId,'messages'), orderBy('ts')),
@@ -992,15 +1256,84 @@ window.openChat = function(friendUid, friendName) {
     }
   );
 };
+window.clearChat = async function() {
+  if (!activeChatFriendId) return;
+  if (!confirm('Clear all messages in this chat? This cannot be undone.')) return;
+  const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
+  const snap = await getDocs(collection(db,'chats',chatId,'messages'));
+  const deletes = snap.docs.map(d => deleteDoc(doc(db,'chats',chatId,'messages',d.id)));
+  await Promise.all(deletes);
+  // record clear time
+  await setDoc(doc(db,'chats',chatId,'meta','clearLog'),{ lastCleared: serverTimestamp() }, { merge: true });
+};
+
+async function maybeAutoCleanChat(chatId) {
+  // Auto-clear if last clear was over 30 days ago (or never)
+  try {
+    const metaSnap = await getDoc(doc(db,'chats',chatId,'meta','clearLog'));
+    const lastCleared = metaSnap.exists() ? metaSnap.data().lastCleared?.toDate() : null;
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now - 30*24*60*60*1000);
+    if (!lastCleared || lastCleared < thirtyDaysAgo) {
+      const snap = await getDocs(collection(db,'chats',chatId,'messages'));
+      // Only delete messages older than 30 days
+      const deletes = snap.docs
+        .filter(d => d.data().ts?.toDate?.() < thirtyDaysAgo)
+        .map(d => deleteDoc(doc(db,'chats',chatId,'messages',d.id)));
+      if (deletes.length) {
+        await Promise.all(deletes);
+        await setDoc(doc(db,'chats',chatId,'meta','clearLog'),{ lastCleared: serverTimestamp() },{ merge: true });
+      }
+    }
+  } catch(e) { /* silently fail */ }
+}
+
 window.closeChatWindow = function() {
   document.getElementById('chat-window').classList.add('hidden');
-  if (chatUnsub) { chatUnsub(); chatUnsub=null; }
+  if (chatUnsub) { chatUnsub(); chatUnsub = null; }
   activeChatFriendId = null;
 };
+// ── Chat Filter ──
+const BUILTIN_BLOCKED = [
+  // profanity
+  'fuck','shit','ass','bitch','cunt','dick','cock','pussy','bastard','damn','hell',
+  'piss','crap','fag','slut','whore','nigger','nigga','retard','faggot',
+  // bad topics
+  'suicide','kill yourself','kys','self harm','overdose','bomb','terrorist',
+  'rape','molest','pedophile','cp','nude','naked','porn','sex','drugs','cocaine','heroin',
+  'weed','meth','shoot up','murder','stab'
+];
+
+let customBlockedWords = []; // loaded from Firebase (admin only)
+
+async function loadBlockedWords() {
+  const snap = await getDoc(doc(db, 'admin', 'blockedWords'));
+  if (snap.exists()) customBlockedWords = snap.data().words || [];
+}
+
+function isMessageBlocked(text) {
+  const lower = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const words  = lower.split(/\s+/);
+  const allBlocked = [...BUILTIN_BLOCKED, ...customBlockedWords.map(w=>w.toLowerCase())];
+  // check whole words and phrases
+  for (const blocked of allBlocked) {
+    if (blocked.includes(' ')) {
+      if (lower.includes(blocked)) return true;
+    } else {
+      if (words.includes(blocked)) return true;
+    }
+  }
+  return false;
+}
+
 window.sendChatMsg = async function() {
   const input = document.getElementById('chat-input');
   const text  = input.value.trim();
   if (!text || !activeChatFriendId) return;
+  if (isMessageBlocked(text)) {
+    input.value = '';
+    return; // silently block
+  }
   const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
   await addDoc(collection(db,'chats',chatId,'messages'),{
     from: currentUser.uid, text, ts: serverTimestamp()
@@ -1008,17 +1341,63 @@ window.sendChatMsg = async function() {
   input.value = '';
 };
 
-// ── Customize ──
+// ── Opacity ──
+const OPACITY_TARGETS = {
+  task:    () => document.getElementById('screen-dash'),
+  sticky:  () => document.getElementById('sticky-container'),
+  modal:   () => document.querySelector('.modal'),
+  friends: () => document.getElementById('friends-window'),
+  chat:    () => document.getElementById('chat-window'),
+  nav:     () => document.querySelector('.dash-header'),
+};
+
+window.previewOpacity = function(key, val) {
+  document.getElementById(`op-${key}-val`).textContent = val + '%';
+  applyOneOpacity(key, val / 100);
+};
+
+function applyOneOpacity(key, val) {
+  const el = OPACITY_TARGETS[key]?.();
+  if (el) el.style.opacity = val;
+  // for modal, apply to all overlays
+  if (key === 'modal') {
+    document.querySelectorAll('.modal').forEach(m => m.style.opacity = val);
+  }
+  if (key === 'sticky') {
+    document.querySelectorAll('.sticky-note').forEach(s => s.style.opacity = val);
+  }
+}
+
+function applyOpacities(op) {
+  if (!op) return;
+  Object.keys(op).forEach(key => applyOneOpacity(key, op[key] / 100));
+}
+
+function loadOpacitySliders(op) {
+  if (!op) return;
+  Object.keys(op).forEach(key => {
+    const slider = document.getElementById(`op-${key}`);
+    const label  = document.getElementById(`op-${key}-val`);
+    if (slider) slider.value = op[key];
+    if (label)  label.textContent = op[key] + '%';
+  });
+}
 const ACCENT_PRESETS = ['#c8f04a','#60a5fa','#f472b6','#fb923c','#34d399','#e879f9','#facc15','#f87171'];
 const BG_PRESETS     = ['#0e0e11','#0f172a','#1a0a0a','#0a0a1a','#0a1a0a','#1a1a0a','#f8fafc','#1e1b4b'];
 
+window.toggleGlobalStickyTheme = async function(val) {
+  await saveProfile({ stickyThemed: val });
+  renderAllStickies();
+};
+
 window.openCustomize = function() {
-  // Accent swatches
   const as = document.getElementById('accent-swatches');
-  as.innerHTML = ACCENT_PRESETS.map(c=>`<div class="swatch ${getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()===c?'active':''}" style="background:${c}" onclick="previewAccent('${c}')"></div>`).join('');
-  // BG swatches
+  as.innerHTML = ACCENT_PRESETS.map(c=>`<div class="swatch" style="background:${c}" onclick="previewAccent('${c}')"></div>`).join('');
   const bs = document.getElementById('bg-swatches');
   bs.innerHTML = BG_PRESETS.map(c=>`<div class="swatch" style="background:${c};border:2px solid #444" onclick="previewBg('${c}')"></div>`).join('');
+  const op = userProfile?.theme?.opacity || {};
+  loadOpacitySliders({ task:100, sticky:100, modal:100, friends:100, chat:100, nav:100, ...op });
+  document.getElementById('sticky-theme-toggle').checked = !!userProfile?.stickyThemed;
   document.getElementById('customize-overlay').classList.remove('hidden');
 };
 window.closeCustomize = function() { document.getElementById('customize-overlay').classList.add('hidden'); };
@@ -1042,18 +1421,24 @@ window.setFont = function(font) {
   document.documentElement.style.setProperty('--font-ui', `'${font}', monospace`);
 };
 window.saveTheme = async function() {
+  const opacity = {};
+  ['task','sticky','modal','friends','chat','nav'].forEach(key => {
+    const s = document.getElementById(`op-${key}`);
+    if (s) opacity[key] = parseInt(s.value);
+  });
   const theme = {
-    accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
-    bg: document.body.style.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+    accent:  getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+    bg:      document.body.style.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
     bgImage: document.getElementById('bg-image-url').value.trim(),
-    font: getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim(),
+    font:    getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim(),
+    opacity,
   };
   await saveProfile({ theme });
   setNotice('customize-notice', 'Theme saved!', 'success');
   setTimeout(() => closeCustomize(), 800);
 };
 window.resetTheme = async function() {
-  const defaults = { accent:'#c8f04a', bg:'#0e0e11', bgImage:'', font:"'DM Mono', monospace" };
+  const defaults = { accent:'#c8f04a', bg:'#0e0e11', bgImage:'', font:"'DM Mono', monospace", opacity:{ task:100, sticky:100, modal:100, friends:100, chat:100, nav:100 } };
   await saveProfile({ theme: defaults });
   applyTheme(defaults);
   document.getElementById('bg-image-url').value = '';
@@ -1068,6 +1453,7 @@ function applyTheme(t) {
   if (t.bgImage){ document.body.style.backgroundImage = `url('${t.bgImage}')`; }
   else          { document.body.style.backgroundImage = 'none'; }
   if (t.font)   document.documentElement.style.setProperty('--font-ui', t.font);
+  if (t.opacity) applyOpacities(t.opacity);
 }
 
 // ── Settings ──
@@ -1140,6 +1526,20 @@ window.saveToken = async function() {
   document.getElementById('token-status').textContent='✓ Token saved securely in Firebase';
   document.getElementById('gh-token').value='';
 };
+window.loadBlockedWordsToAdmin = async function() {
+  await loadBlockedWords();
+  document.getElementById('blocked-words-input').value = customBlockedWords.join('\n');
+  setNotice('filter-notice', `${customBlockedWords.length} custom word(s) loaded.`, 'info');
+};
+
+window.saveBlockedWords = async function() {
+  const raw = document.getElementById('blocked-words-input').value;
+  const words = raw.split('\n').map(w=>w.trim().toLowerCase()).filter(Boolean);
+  await setDoc(doc(db, 'admin', 'blockedWords'), { words, updatedBy: userProfile.username, updatedAt: serverTimestamp() });
+  customBlockedWords = words;
+  setNotice('filter-notice', `✓ Filter saved — ${words.length} custom word(s) active.`, 'success');
+};
+
 window.manualSync = function() { doGithubSync(false); };
 
 // ── Email ──
