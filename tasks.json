@@ -4,10 +4,6 @@
   "scheduleEnabled": true,
   "tasks": [
     {
-      "name": "Auto_sync",
-      "date": "2026-05-31"
-    },
-    {
       "name": "Spanish_Final",
       "date": "2026-05-14"
     },
@@ -60,5 +56,5 @@
       "date": "2026-05-08"
     }
   ],
-  "lastSynced": "2026-05-12T18:49:03.320Z"
+  "lastSynced": "2026-05-12T18:49:12.639Z"
 }
