@@ -13,7 +13,13 @@
   --muted: #7a7a8a; --danger: #ff5c5c; --radius: 12px;
   --font-ui: 'DM Mono', monospace;
   --bg-image: none;
+  --op-task: 1; --op-modal: 1; --op-friends: 1; --op-chat: 1; --op-nav: 1;
 }
+#screen-dash { background: rgba(23,23,28,var(--op-task)) !important; }
+.modal { background: rgba(23,23,28,var(--op-modal)) !important; }
+#friends-window { background: rgba(23,23,28,var(--op-friends)) !important; }
+#chat-window { background: rgba(23,23,28,var(--op-chat)) !important; }
+.dash-header { background: rgba(23,23,28,var(--op-nav)) !important; border-radius: 12px; }
 html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; }
 body { background-image: var(--bg-image); background-size: cover; background-position: center; background-attachment: fixed; }
 
@@ -1047,7 +1053,9 @@ function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
   const el = document.createElement('div');
   el.className = 'sticky-note' + (themed||s.themed ? ' themed' : '');
   el.id = `sticky-${s.id}`;
-  el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px;${(!themed&&!s.themed)?`background:${s.color}`:''}`;
+  const stickyColor = (!themed&&!s.themed) ? s.color : '';
+  el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px;`;
+  if (stickyColor) { el.style.backgroundColor = stickyColor; el.dataset.baseColor = stickyColor; }
   const isStacked = stackId !== null && stackLen > 1;
   const stackNav = isStacked ? `
     <div class="sticky-footer">
@@ -1081,9 +1089,15 @@ function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
   makeDraggable(el, el.querySelector('.sticky-header'), s.id, 'sticky');
   makeResizable(el, el.querySelector('.sticky-resize'), s.id, 'sticky');
 
-  // apply saved opacity
+  // apply saved sticky opacity to background only
   const op = userProfile?.theme?.opacity?.sticky;
-  if (op !== undefined) el.style.opacity = op / 100;
+  if (op !== undefined && stickyColor) {
+    const hex = stickyColor.match(/^#([0-9a-f]{6})$/i);
+    if (hex) {
+      const r=parseInt(hex[1].slice(0,2),16), g=parseInt(hex[1].slice(2,4),16), b=parseInt(hex[1].slice(4,6),16);
+      el.style.backgroundColor = `rgba(${r},${g},${b},${op/100})`;
+    }
+  }
 }
 
 // Stack navigation
@@ -1376,29 +1390,27 @@ window.sendChatMsg = async function() {
 };
 
 // ── Opacity ──
-const OPACITY_TARGETS = {
-  task:    () => document.getElementById('screen-dash'),
-  sticky:  () => document.getElementById('sticky-container'),
-  modal:   () => document.querySelector('.modal'),
-  friends: () => document.getElementById('friends-window'),
-  chat:    () => document.getElementById('chat-window'),
-  nav:     () => document.querySelector('.dash-header'),
-};
-
 window.previewOpacity = function(key, val) {
   document.getElementById(`op-${key}-val`).textContent = val + '%';
   applyOneOpacity(key, val / 100);
 };
 
-function applyOneOpacity(key, val) {
-  const el = OPACITY_TARGETS[key]?.();
-  if (el) el.style.opacity = val;
-  // for modal, apply to all overlays
-  if (key === 'modal') {
-    document.querySelectorAll('.modal').forEach(m => m.style.opacity = val);
-  }
+function applyOneOpacity(key, frac) {
   if (key === 'sticky') {
-    document.querySelectorAll('.sticky-note').forEach(s => s.style.opacity = val);
+    // sticky notes have their own color — blend toward transparent
+    document.querySelectorAll('.sticky-note').forEach(s => {
+      // parse existing background color and override alpha
+      const base = s.dataset.baseColor || s.style.backgroundColor || '#fef08a';
+      if (!s.dataset.baseColor) s.dataset.baseColor = base;
+      // convert hex to rgba if needed
+      let r=254,g=240,b=138;
+      const hex = base.match(/^#([0-9a-f]{6})$/i);
+      if (hex) { r=parseInt(hex[1].slice(0,2),16); g=parseInt(hex[1].slice(2,4),16); b=parseInt(hex[1].slice(4,6),16); }
+      s.style.backgroundColor = `rgba(${r},${g},${b},${frac})`;
+    });
+  } else {
+    // use CSS variable — background goes transparent, text/borders stay solid
+    document.documentElement.style.setProperty(`--op-${key}`, frac);
   }
 }
 
