@@ -1287,8 +1287,10 @@ async function maybeAutoCleanChat(chatId) {
     }
   } catch(e) { /* silently fail */ }
 }
+
+window.closeChatWindow = function() {
   document.getElementById('chat-window').classList.add('hidden');
-  if (chatUnsub) { chatUnsub(); chatUnsub=null; }
+  if (chatUnsub) { chatUnsub(); chatUnsub = null; }
   activeChatFriendId = null;
 };
 // ── Chat Filter ──
