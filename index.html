@@ -195,6 +195,11 @@ select { cursor:pointer; }
 /* Shared task badge */
 .shared-badge { font-size:10px; background:rgba(200,240,74,.1); color:var(--accent); border:1px solid rgba(200,240,74,.2); border-radius:6px; padding:2px 6px; margin-left:6px; }
 
+.sticky-header.stack-target {
+  background: rgba(200,240,74,0.25) !important;
+  border-bottom-color: rgba(200,240,74,0.6) !important;
+}
+
 .hidden { display: none !important; }
 </style>
 </head>
@@ -999,20 +1004,23 @@ window.addStickyNote = async function() {
 };
 
 function buildStacks() {
+  const prevIndex = { ...stickyActiveIndex };
   stickyStacks = {};
-  stickyActiveIndex = {};
   stickies.forEach(s => {
     if (s.stackId) {
-      if (!stickyStacks[s.stackId]) { stickyStacks[s.stackId] = []; stickyActiveIndex[s.stackId] = 0; }
+      if (!stickyStacks[s.stackId]) stickyStacks[s.stackId] = [];
       stickyStacks[s.stackId].push(s.id);
     }
   });
-  // sort each stack by stackOrder
+  // sort each stack by stackOrder and preserve active index (clamp to valid range)
   Object.keys(stickyStacks).forEach(sid => {
     stickyStacks[sid].sort((a,b) => {
       const sa = stickies.find(s=>s.id===a), sb = stickies.find(s=>s.id===b);
       return (sa?.stackOrder||0) - (sb?.stackOrder||0);
     });
+    const len = stickyStacks[sid].length;
+    const prev = prevIndex[sid] ?? 0;
+    stickyActiveIndex[sid] = Math.min(prev, len - 1);
   });
 }
 
@@ -1048,7 +1056,7 @@ function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
         <button onclick="stickyNavNext('${stackId}')" ${stackIdx===stackLen-1?'disabled':''}>▶</button>
       </div>
       <button class="sticky-btn" onclick="unstackSticky('${s.id}')" title="Remove from stack">Unstack</button>
-    </div>` : `<div class="sticky-footer"><button class="sticky-btn" onclick="stackWithNearest('${s.id}')" title="Stack with nearest note">Stack</button></div>`;
+    </div>` : `<div class="sticky-footer"></div>`;
 
   el.innerHTML = `
     <div class="sticky-header">
@@ -1590,18 +1598,82 @@ window.closeLogout=function(){document.getElementById('logout-overlay').classLis
 function makeDraggable(el, handle, id, type) {
   let sx,sy,ex,ey;
   handle.addEventListener('mousedown', e => {
-    if (e.target.tagName==='BUTTON'||e.target.tagName==='TEXTAREA') return;
+    if (e.target.tagName==='BUTTON'||e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT') return;
     e.preventDefault();
     sx=e.clientX-el.offsetLeft; sy=e.clientY-el.offsetTop;
-    const onMove = e => { ex=e.clientX-sx; ey=e.clientY-sy; el.style.left=ex+'px'; el.style.top=ey+'px'; };
-    const onUp   = () => {
+
+    const onMove = e => {
+      ex=e.clientX-sx; ey=e.clientY-sy;
+      el.style.left=ex+'px'; el.style.top=ey+'px';
+
+      if (type==='sticky') {
+        // highlight any target sticky header we're hovering over
+        document.querySelectorAll('.sticky-header').forEach(h => h.classList.remove('stack-target'));
+        const dragRect = handle.getBoundingClientRect();
+        document.querySelectorAll('.sticky-note').forEach(other => {
+          if (other === el) return;
+          const otherHeader = other.querySelector('.sticky-header');
+          if (!otherHeader) return;
+          const r = otherHeader.getBoundingClientRect();
+          const overlap = !(dragRect.right < r.left || dragRect.left > r.right || dragRect.bottom < r.top || dragRect.top > r.bottom);
+          if (overlap) otherHeader.classList.add('stack-target');
+        });
+      }
+    };
+
+    const onUp = async () => {
       document.removeEventListener('mousemove',onMove);
       document.removeEventListener('mouseup',onUp);
-      if(type==='sticky') updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{x:ex,y:ey});
+      document.querySelectorAll('.sticky-header').forEach(h => h.classList.remove('stack-target'));
+
+      if (type==='sticky') {
+        // check if we dropped onto another sticky's header
+        const dragRect = handle.getBoundingClientRect();
+        let merged = false;
+        for (const other of document.querySelectorAll('.sticky-note')) {
+          if (other === el) continue;
+          const otherId = other.id.replace('sticky-','');
+          const otherHeader = other.querySelector('.sticky-header');
+          if (!otherHeader) continue;
+          const r = otherHeader.getBoundingClientRect();
+          const overlap = !(dragRect.right < r.left || dragRect.left > r.right || dragRect.bottom < r.top || dragRect.top > r.bottom);
+          if (overlap) {
+            await mergeStickies(id, otherId);
+            merged = true;
+            break;
+          }
+        }
+        if (!merged) {
+          updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{x:ex,y:ey});
+        }
+      }
     };
+
     document.addEventListener('mousemove',onMove);
     document.addEventListener('mouseup',onUp);
   });
+}
+
+async function mergeStickies(dragId, targetId) {
+  const dragged = stickies.find(s=>s.id===dragId);
+  const target  = stickies.find(s=>s.id===targetId);
+  if (!dragged||!target) return;
+
+  // if target is already in a stack, join that stack
+  if (target.stackId) {
+    const existingStack = target.stackId;
+    const stackNotes = stickies.filter(s=>s.stackId===existingStack);
+    const maxOrder = Math.max(...stackNotes.map(s=>s.stackOrder||0));
+    await updateDoc(doc(db,'users',currentUser.uid,'stickies',dragId),{stackId:existingStack, stackOrder:maxOrder+1});
+    // if dragged was in its own stack, clean it up
+    if (dragged.stackId && dragged.stackId !== existingStack) await unstackSticky(dragId);
+  } else {
+    // create a new stack
+    const stackId = `stack_${Date.now()}`;
+    await updateDoc(doc(db,'users',currentUser.uid,'stickies',targetId),{stackId, stackOrder:0});
+    await updateDoc(doc(db,'users',currentUser.uid,'stickies',dragId),  {stackId, stackOrder:1});
+    if (dragged.stackId) await unstackSticky(dragId);
+  }
 }
 function makeResizable(el, handle, id, type) {
   handle.addEventListener('mousedown', e => {
