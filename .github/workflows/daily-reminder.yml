@@ -26,15 +26,15 @@ jobs:
       - name: Read tasks and send email
         if: steps.check.outputs.exists == 'true'
         env:
-          EMAILJS_SERVICE_ID:  ${{ secrets.EMAILJS_SERVICE_ID }}
-          EMAILJS_TEMPLATE_ID: ${{ secrets.EMAILJS_TEMPLATE_ID }}
-          EMAILJS_PUBLIC_KEY:  ${{ secrets.EMAILJS_PUBLIC_KEY }}
+          SMTP_FROM:     ${{ secrets.SMTP_FROM }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: |
           python3 - <<'EOF'
           import json
-          import urllib.request
-          import urllib.parse
           import os
+          import smtplib
+          from email.mime.text import MIMEText
+          from email.mime.multipart import MIMEMultipart
           from datetime import datetime, timezone, timedelta
 
           # Load tasks
@@ -50,22 +50,19 @@ jobs:
               print("No email address set — skipping.")
               exit(0)
 
-          # Support multiple comma-separated addresses
           addresses = [e.strip() for e in email_addr.split(',') if e.strip()]
-
-          username = data.get("username", "there")
-          tasks    = data.get("tasks", [])
+          username  = data.get("username", "there")
+          tasks     = data.get("tasks", [])
 
           # Get today in MT (UTC-7)
-          mt_now  = datetime.now(timezone.utc) - timedelta(hours=7)
-          today   = mt_now.date()
+          mt_now = datetime.now(timezone.utc) - timedelta(hours=7)
+          today  = mt_now.date()
 
           # Filter tasks due within 3 days (including overdue)
           upcoming = []
           for t in tasks:
               raw = t.get("date", "")
               try:
-                  # Handle both YYYY-MM-DD and DD-MM-YYYY
                   if len(raw) == 10 and raw[4] == "-":
                       due = datetime.strptime(raw, "%Y-%m-%d").date()
                   else:
@@ -94,31 +91,15 @@ jobs:
 
           # Send to each address
           for addr in addresses:
-            payload = json.dumps({
-                "service_id":  os.environ["EMAILJS_SERVICE_ID"],
-                "template_id": os.environ["EMAILJS_TEMPLATE_ID"],
-                "user_id":     os.environ["EMAILJS_PUBLIC_KEY"],
-                "template_params": {
-                    "name":      username,
-                    "username":  username,
-                    "time":      date_label,
-                    "message":   "Here are your tasks due within the next 3 days:",
-                    "task_list": task_list,
-                    "to_email":  addr,
-                }
-            }).encode()
+              msg = MIMEMultipart()
+              msg["From"]    = os.environ["SMTP_FROM"]
+              msg["To"]      = addr
+              msg["Subject"] = f"Task Reminder — {date_label}"
+              body = f"Hi {username},\n\nHere are your tasks due within the next 3 days:\n\n{task_list}\n\nGood luck!"
+              msg.attach(MIMEText(body, "plain"))
 
-            req = urllib.request.Request(
-              "https://api.emailjs.com/api/v1.0/email/send",
-              data=payload,
-              headers={"Content-Type": "application/json", "Origin": "https://www.emailjs.com"},
-            )
-
-
-            try:
-                with urllib.request.urlopen(req) as resp:
-                    print(f"Email sent to {addr}! Status: {resp.status}")
-            except urllib.error.HTTPError as e:
-                print(f"EmailJS error {e.code} for {addr}: {e.read().decode()}")
-                exit(1)
+              with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                  server.login(os.environ["SMTP_FROM"], os.environ["SMTP_PASSWORD"])
+                  server.sendmail(os.environ["SMTP_FROM"], addr, msg.as_string())
+                  print(f"Email sent to {addr}!")
           EOF
