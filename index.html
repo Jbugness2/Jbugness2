@@ -1053,11 +1053,12 @@ function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
   el.innerHTML = `
     <div class="sticky-header">
       <input class="sticky-title-input" value="${esc(s.title||'Note')}" placeholder="Title…"
-        onblur="saveStickyTitle('${s.id}',this.value)"
-        onmousedown="event.stopPropagation()"
+        readonly
+        onblur="this.setAttribute('readonly',''); saveStickyTitle('${s.id}',this.value)"
+        ondblclick="this.removeAttribute('readonly'); this.focus(); event.stopPropagation()"
+        onmousedown="if(this.hasAttribute('readonly')) return; event.stopPropagation()"
         onclick="event.stopPropagation()">
       <div class="sticky-actions">
-        <button class="sticky-btn" onclick="toggleStickyTheme('${s.id}')" title="Toggle theme">🎨</button>
         <button class="sticky-btn" onclick="deleteStickyNote('${s.id}')">✕</button>
       </div>
     </div>
