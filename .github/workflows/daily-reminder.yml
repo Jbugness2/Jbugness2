@@ -58,7 +58,7 @@ jobs:
           mt_now = datetime.now(timezone.utc) - timedelta(hours=7)
           today  = mt_now.date()
 
-          # Filter tasks due within 3 days (including overdue)
+          # Filter and sort tasks due within 3 days (including overdue)
           upcoming = []
           for t in tasks:
               raw = t.get("date", "")
@@ -80,13 +80,15 @@ jobs:
                       label = "Due TOMORROW"
                   else:
                       label = f"Due in {diff} days ({due.strftime('%b %d')})"
-                  upcoming.append(f"• {t['name']} — {label}")
+                  upcoming.append((due, f"• {t['name']} — {label}"))
+
+          upcoming.sort(key=lambda x: x[0])
+          task_list = "\n".join(line for _, line in upcoming)
 
           if not upcoming:
               print("No tasks due within 3 days — skipping email.")
               exit(0)
 
-          task_list  = "\n".join(upcoming)
           date_label = mt_now.strftime("%A, %B %d, %Y")
 
           # Send to each address
