@@ -128,8 +128,9 @@ select { cursor:pointer; }
 .sticky-title-input {
   font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
   background: transparent; border: none; outline: none; flex:1;
-  min-width: 0; color: #000; padding: 0; cursor: text;
+  min-width: 0; color: #000; padding: 0; cursor: move;
 }
+.sticky-title-input:not([readonly]) { cursor: text; }
 .sticky-title-input::placeholder { opacity: .5; }
 .sticky-body { flex:1; background:transparent; border:none; outline:none; font-size:12px; color:#000; font-family:var(--font-ui); resize:none; min-height:50px; line-height:1.6; padding:0; width:100%; margin-bottom:0; }
 .sticky-resize { width:14px; height:14px; background:rgba(0,0,0,.2); border-radius:3px; cursor:se-resize; align-self:flex-end; flex-shrink:0; }
@@ -1088,13 +1089,34 @@ function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
 // Stack navigation
 window.stickyNavPrev = function(stackId) {
   stickyActiveIndex[stackId] = Math.max(0, (stickyActiveIndex[stackId]||0) - 1);
-  renderAllStickies();
+  _renderStackInPlace(stackId);
 };
 window.stickyNavNext = function(stackId) {
   const len = stickyStacks[stackId]?.length || 1;
   stickyActiveIndex[stackId] = Math.min(len-1, (stickyActiveIndex[stackId]||0) + 1);
-  renderAllStickies();
+  _renderStackInPlace(stackId);
 };
+
+// Re-render a single stack without moving it
+function _renderStackInPlace(stackId) {
+  // find the currently visible DOM element for this stack and grab its position
+  const ids = stickyStacks[stackId];
+  if (!ids) { renderAllStickies(); return; }
+  let currentX, currentY;
+  for (const sid of ids) {
+    const el = document.getElementById(`sticky-${sid}`);
+    if (el) { currentX = el.offsetLeft; currentY = el.offsetTop; break; }
+  }
+  // update the position of every note in the stack to match current screen position
+  // so whichever note shows next appears in the same spot
+  if (currentX !== undefined) {
+    ids.forEach(sid => {
+      const s = stickies.find(s=>s.id===sid);
+      if (s) { s.x = currentX; s.y = currentY; }
+    });
+  }
+  renderAllStickies();
+}
 
 // Stack the dragged note with the nearest note
 window.stackWithNearest = async function(id) {
