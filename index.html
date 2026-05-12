@@ -130,7 +130,7 @@ select { cursor:pointer; }
 .sticky-note.themed .sticky-title-input { color: var(--text) !important; }
 .sticky-note.themed .sticky-btn { background: var(--surface2) !important; color: var(--muted) !important; }
 .sticky-note.themed .sticky-btn:hover { color: var(--text) !important; }
-.sticky-header { display:flex; align-items:center; justify-content:space-between; cursor:move; user-select:none; padding-bottom:5px; border-bottom:1px solid rgba(0,0,0,.12); gap:6px; }
+.sticky-header { display:flex; align-items:center; justify-content:space-between; cursor:move; user-select:none; -webkit-user-select:none; padding-bottom:5px; border-bottom:1px solid rgba(0,0,0,.12); gap:6px; }
 .sticky-title-input {
   font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
   background: transparent; border: none; outline: none; flex:1;
@@ -1073,7 +1073,7 @@ function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
         readonly
         onblur="this.setAttribute('readonly',''); saveStickyTitle('${s.id}',this.value)"
         ondblclick="this.removeAttribute('readonly'); this.focus(); event.stopPropagation()"
-        onmousedown="if(this.hasAttribute('readonly')){event.preventDefault();}else{event.stopPropagation();}"
+        onmousedown="if(!this.hasAttribute('readonly')) event.stopPropagation();"
         onclick="event.stopPropagation()">
       <div class="sticky-actions">
         <button class="sticky-btn" onclick="deleteStickyNote('${s.id}')">✕</button>
@@ -1635,6 +1635,7 @@ function makeDraggable(el, handle, id, type) {
     if (e.target.tagName==='BUTTON'||e.target.tagName==='TEXTAREA') return;
     if (e.target.tagName==='INPUT' && !e.target.hasAttribute('readonly')) return;
     e.preventDefault();
+    if (e.target.tagName==='INPUT') { e.target.blur(); }
     sx=e.clientX-el.offsetLeft; sy=e.clientY-el.offsetTop;
 
     const onMove = e => {
