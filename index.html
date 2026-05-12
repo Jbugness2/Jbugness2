@@ -1397,19 +1397,15 @@ window.previewOpacity = function(key, val) {
 
 function applyOneOpacity(key, frac) {
   if (key === 'sticky') {
-    // sticky notes have their own color — blend toward transparent
     document.querySelectorAll('.sticky-note').forEach(s => {
-      // parse existing background color and override alpha
-      const base = s.dataset.baseColor || s.style.backgroundColor || '#fef08a';
-      if (!s.dataset.baseColor) s.dataset.baseColor = base;
-      // convert hex to rgba if needed
-      let r=254,g=240,b=138;
+      const base = s.dataset.baseColor; // always original hex set in createStickyDOM
+      if (!base) return; // themed notes have no base color, skip
       const hex = base.match(/^#([0-9a-f]{6})$/i);
-      if (hex) { r=parseInt(hex[1].slice(0,2),16); g=parseInt(hex[1].slice(2,4),16); b=parseInt(hex[1].slice(4,6),16); }
+      if (!hex) return;
+      const r=parseInt(hex[1].slice(0,2),16), g=parseInt(hex[1].slice(2,4),16), b=parseInt(hex[1].slice(4,6),16);
       s.style.backgroundColor = `rgba(${r},${g},${b},${frac})`;
     });
   } else {
-    // use CSS variable — background goes transparent, text/borders stay solid
     document.documentElement.style.setProperty(`--op-${key}`, frac);
   }
 }
