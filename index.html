@@ -4,124 +4,186 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Taskr</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #0e0e11; --surface: #17171c; --surface2: #1f1f27;
-    --border: #2a2a35; --accent: #c8f04a; --text: #f0f0ee;
-    --muted: #7a7a8a; --danger: #ff5c5c; --radius: 12px;
-  }
-  html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 14px; }
-  #app {
-    min-height: 100vh; display: flex; align-items: center;
-    justify-content: center; padding: 24px; position: relative;
-  }
-  #app::before {
-    content: ''; position: fixed; inset: 0;
-    background-image:
-      linear-gradient(rgba(200,240,74,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(200,240,74,0.03) 1px, transparent 1px);
-    background-size: 40px 40px; pointer-events: none;
-  }
-  .card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 20px; padding: 40px; width: 100%; max-width: 440px;
-    animation: fadeUp .35s ease both;
-  }
-  .card.wide { max-width: 600px; }
-  @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0e0e11; --surface: #17171c; --surface2: #1f1f27;
+  --border: #2a2a35; --accent: #c8f04a; --text: #f0f0ee;
+  --muted: #7a7a8a; --danger: #ff5c5c; --radius: 12px;
+  --font-ui: 'DM Mono', monospace;
+  --bg-image: none;
+}
+html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; }
+body { background-image: var(--bg-image); background-size: cover; background-position: center; background-attachment: fixed; }
 
-  .logo { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -1px; color: var(--accent); margin-bottom: 6px; }
-  .logo span { color: var(--muted); font-weight: 400; }
-  .subtitle { color: var(--muted); font-size: 12px; margin-bottom: 32px; letter-spacing: .04em; }
+#app { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; }
+#app::before { content:''; position:fixed; inset:0; background-image: linear-gradient(rgba(200,240,74,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(200,240,74,0.03) 1px,transparent 1px); background-size:40px 40px; pointer-events:none; z-index:0; }
 
-  label { display:block; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
-  input[type="text"], input[type="password"], input[type="email"], input[type="date"] {
-    width:100%; background:var(--surface2); border:1px solid var(--border);
-    border-radius:var(--radius); color:var(--text); font-family:'DM Mono',monospace;
-    font-size:14px; padding:12px 14px; outline:none; transition:border-color .2s; margin-bottom:18px;
-  }
-  input:focus { border-color: var(--accent); }
-  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6) sepia(1) saturate(3) hue-rotate(35deg); cursor:pointer; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 40px; width: 100%; max-width: 440px; animation: fadeUp .35s ease both; position: relative; z-index: 1; }
+.card.wide { max-width: 620px; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
 
-  .btn {
-    display:inline-flex; align-items:center; justify-content:center; gap:6px;
-    border:none; border-radius:var(--radius); cursor:pointer;
-    font-family:'DM Mono',monospace; font-size:13px; font-weight:500;
-    padding:12px 20px; transition:all .18s; letter-spacing:.03em; white-space:nowrap;
-  }
-  .btn-primary { background:var(--accent); color:#0e0e11; width:100%; font-weight:700; margin-top:4px; }
-  .btn-primary:hover { background:#d8ff5a; transform:translateY(-1px); }
-  .btn-primary:disabled { opacity:.5; cursor:not-allowed; transform:none; }
-  .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
-  .btn-ghost:hover { color:var(--text); border-color:var(--muted); }
-  .btn-danger { background:transparent; color:var(--danger); border:1px solid transparent; padding:6px 10px; font-size:12px; }
-  .btn-danger:hover { border-color:var(--danger); background:rgba(255,92,92,.08); }
-  .btn-icon { background:var(--surface2); border:1px solid var(--border); color:var(--muted); padding:8px 12px; font-size:16px; border-radius:10px; }
-  .btn-icon:hover { color:var(--text); border-color:var(--muted); }
+.logo { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; letter-spacing: -1px; color: var(--accent); margin-bottom: 6px; }
+.logo span { color: var(--muted); font-weight: 400; }
+.subtitle { color: var(--muted); font-size: 12px; margin-bottom: 32px; }
 
-  .switch-link { text-align:center; margin-top:22px; color:var(--muted); font-size:12px; }
-  .switch-link a { color:var(--accent); cursor:pointer; text-decoration:none; }
+label { display:block; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+input[type="text"], input[type="password"], input[type="email"], input[type="date"], input[type="color"], textarea, select {
+  width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius);
+  color:var(--text); font-family:var(--font-ui); font-size:14px; padding:12px 14px;
+  outline:none; transition:border-color .2s; margin-bottom:14px;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+input[type="color"] { height:44px; padding:4px 8px; cursor:pointer; }
+input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(0.6) sepia(1) saturate(3) hue-rotate(35deg); cursor:pointer; }
+textarea { resize:none; line-height:1.5; }
+select { cursor:pointer; }
 
-  .notice { padding:10px 14px; border-radius:10px; font-size:12px; margin-bottom:16px; }
-  .notice.error   { background:rgba(255,92,92,.1);  border:1px solid rgba(255,92,92,.3);  color:#ff8a8a; }
-  .notice.success { background:rgba(200,240,74,.08); border:1px solid rgba(200,240,74,.25); color:var(--accent); }
-  .notice.info    { background:rgba(100,150,255,.08); border:1px solid rgba(100,150,255,.25); color:#a0b4ff; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:none; border-radius:var(--radius); cursor:pointer; font-family:var(--font-ui); font-size:13px; font-weight:500; padding:12px 20px; transition:all .18s; letter-spacing:.03em; white-space:nowrap; }
+.btn-primary { background:var(--accent); color:#0e0e11; width:100%; font-weight:700; margin-top:4px; }
+.btn-primary:hover { background:#d8ff5a; transform:translateY(-1px); }
+.btn-primary:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+.btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+.btn-ghost:hover { color:var(--text); border-color:var(--muted); }
+.btn-danger { background:transparent; color:var(--danger); border:1px solid transparent; padding:6px 10px; font-size:12px; }
+.btn-danger:hover { border-color:var(--danger); background:rgba(255,92,92,.08); }
+.btn-icon { background:var(--surface2); border:1px solid var(--border); color:var(--muted); padding:8px 12px; font-size:16px; border-radius:10px; }
+.btn-icon:hover { color:var(--text); border-color:var(--muted); }
+.btn-sm { padding:7px 14px; font-size:12px; }
+.btn-accent-sm { background:var(--accent); color:#0e0e11; padding:7px 14px; font-size:12px; font-weight:700; border:none; border-radius:8px; cursor:pointer; font-family:var(--font-ui); transition:all .18s; }
+.btn-accent-sm:hover { background:#d8ff5a; }
 
-  .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; gap:12px; flex-wrap:wrap; }
-  .dash-title { font-family:'Syne',sans-serif; font-size:22px; font-weight:700; }
-  .dash-title span { color:var(--accent); }
+.switch-link { text-align:center; margin-top:22px; color:var(--muted); font-size:12px; }
+.switch-link a { color:var(--accent); cursor:pointer; text-decoration:none; }
 
-  #task-list { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; max-height:380px; overflow-y:auto; padding-right:2px; }
-  #task-list::-webkit-scrollbar { width:4px; }
-  #task-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+.notice { padding:10px 14px; border-radius:10px; font-size:12px; margin-bottom:14px; }
+.notice.error   { background:rgba(255,92,92,.1); border:1px solid rgba(255,92,92,.3); color:#ff8a8a; }
+.notice.success { background:rgba(200,240,74,.08); border:1px solid rgba(200,240,74,.25); color:var(--accent); }
+.notice.info    { background:rgba(100,150,255,.08); border:1px solid rgba(100,150,255,.25); color:#a0b4ff; }
 
-  .task-item { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; transition:border-color .18s; }
-  .task-item:hover { border-color:var(--muted); }
-  .task-info { flex:1; min-width:0; }
-  .task-name { font-weight:500; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:3px; }
-  .task-date { font-size:11px; color:var(--muted); }
-  .task-urgency { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-  .urgency-overdue { background:var(--danger); box-shadow:0 0 6px var(--danger); }
-  .urgency-soon    { background:#f0c040; }
-  .urgency-normal  { background:var(--accent); }
-  .empty-state { text-align:center; color:var(--muted); padding:40px 0; font-size:13px; }
-  .empty-state .big { font-size:32px; margin-bottom:10px; }
+/* Dashboard */
+.dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; gap:12px; flex-wrap:wrap; }
+.dash-title { font-family:'Syne',sans-serif; font-size:22px; font-weight:700; }
+.dash-title span { color:var(--accent); }
+#task-list { display:flex; flex-direction:column; gap:8px; margin-bottom:20px; max-height:380px; overflow-y:auto; padding-right:2px; }
+#task-list::-webkit-scrollbar { width:4px; }
+#task-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+.task-item { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; transition:border-color .18s; }
+.task-item:hover { border-color:var(--muted); }
+.task-info { flex:1; min-width:0; }
+.task-name { font-weight:500; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:3px; }
+.task-date { font-size:11px; color:var(--muted); }
+.task-urgency { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.urgency-overdue { background:var(--danger); box-shadow:0 0 6px var(--danger); }
+.urgency-soon    { background:#f0c040; }
+.urgency-normal  { background:var(--accent); }
+.empty-state { text-align:center; color:var(--muted); padding:40px 0; font-size:13px; }
+.empty-state .big { font-size:32px; margin-bottom:10px; }
 
-  .add-form { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:12px; }
-  .add-form input { margin-bottom:10px; }
+.add-form { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:12px; }
+.add-form input { margin-bottom:10px; }
 
-  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:24px; z-index:100; overflow-y:auto; }
-  .modal { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:32px; width:100%; max-width:400px; }
-  .modal h3 { font-family:'Syne',sans-serif; font-size:18px; margin-bottom:20px; }
-  .modal-btns { display:flex; gap:10px; margin-top:8px; }
-  .modal-btns .btn { flex:1; }
-  .divider { border:none; border-top:1px solid var(--border); margin:22px 0; }
+/* Overlays & Modals */
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:24px; z-index:200; overflow-y:auto; }
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:32px; width:100%; max-width:420px; }
+.modal h3 { font-family:'Syne',sans-serif; font-size:18px; margin-bottom:20px; }
+.modal-btns { display:flex; gap:10px; margin-top:8px; }
+.modal-btns .btn { flex:1; }
+.divider { border:none; border-top:1px solid var(--border); margin:20px 0; }
 
-  .toggle-switch { position:relative; display:inline-block; width:42px; height:24px; cursor:pointer; }
-  .toggle-switch input { opacity:0; width:0; height:0; }
-  .toggle-slider { position:absolute; inset:0; background:var(--surface); border:1px solid var(--border); border-radius:24px; transition:.2s; }
-  .toggle-slider::before { content:''; position:absolute; width:16px; height:16px; left:3px; bottom:3px; background:var(--muted); border-radius:50%; transition:.2s; }
-  .toggle-switch input:checked + .toggle-slider { background:var(--accent); border-color:var(--accent); }
-  .toggle-switch input:checked + .toggle-slider::before { transform:translateX(18px); background:#0e0e11; }
+/* Toggle */
+.toggle-switch { position:relative; display:inline-block; width:42px; height:24px; cursor:pointer; }
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-slider { position:absolute; inset:0; background:var(--surface); border:1px solid var(--border); border-radius:24px; transition:.2s; }
+.toggle-slider::before { content:''; position:absolute; width:16px; height:16px; left:3px; bottom:3px; background:var(--muted); border-radius:50%; transition:.2s; }
+.toggle-switch input:checked + .toggle-slider { background:var(--accent); border-color:var(--accent); }
+.toggle-switch input:checked + .toggle-slider::before { transform:translateX(18px); background:#0e0e11; }
 
-  #screen-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:16px; }
-  .spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
+/* Loading */
+#screen-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:16px; }
+.spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
 
-  .admin-badge { display:inline-block; font-size:10px; letter-spacing:.1em; text-transform:uppercase; background:rgba(200,240,74,.1); color:var(--accent); border:1px solid rgba(200,240,74,.25); border-radius:6px; padding:3px 8px; margin-left:8px; vertical-align:middle; font-family:'DM Mono',monospace; }
-  .hidden { display: none !important; }
+/* Admin badge */
+.admin-badge { display:inline-block; font-size:10px; letter-spacing:.1em; text-transform:uppercase; background:rgba(200,240,74,.1); color:var(--accent); border:1px solid rgba(200,240,74,.25); border-radius:6px; padding:3px 8px; margin-left:8px; vertical-align:middle; font-family:'DM Mono',monospace; }
+
+/* ── Sticky Notes ── */
+.sticky-note {
+  position: fixed; z-index: 150; min-width: 180px; min-height: 120px;
+  border-radius: 12px; padding: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  display: flex; flex-direction: column; gap: 6px; cursor: default;
+  border: 1px solid rgba(255,255,255,.08);
+}
+.sticky-header { display:flex; align-items:center; justify-content:space-between; cursor:move; user-select:none; padding-bottom:6px; border-bottom:1px solid rgba(0,0,0,.15); }
+.sticky-title { font-family:'Syne',sans-serif; font-size:12px; font-weight:700; opacity:.8; }
+.sticky-body { flex:1; background:transparent; border:none; outline:none; font-size:13px; color:#000; font-family:var(--font-ui); resize:none; min-height:60px; line-height:1.6; padding:0; width:100%; margin-bottom:0; }
+.sticky-resize { width:14px; height:14px; background:rgba(0,0,0,.2); border-radius:3px; cursor:se-resize; align-self:flex-end; flex-shrink:0; }
+.sticky-actions { display:flex; gap:4px; }
+.sticky-btn { background:rgba(0,0,0,.15); border:none; border-radius:6px; padding:3px 7px; font-size:11px; cursor:pointer; color:#000; font-family:var(--font-ui); }
+.sticky-btn:hover { background:rgba(0,0,0,.25); }
+
+#sticky-container { position:fixed; inset:0; pointer-events:none; z-index:150; }
+#sticky-container .sticky-note { pointer-events:all; }
+
+/* ── Friends / Chat ── */
+.draggable-window {
+  position: fixed; z-index: 160; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0,0,0,.5); min-width: 280px; min-height: 200px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.window-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; background:var(--surface2); cursor:move;
+  user-select:none; border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.window-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
+.window-controls { display:flex; gap:6px; }
+.win-btn { background:var(--surface); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:3px 8px; font-size:12px; cursor:pointer; font-family:var(--font-ui); }
+.win-btn:hover { color:var(--text); }
+.window-body { flex:1; overflow-y:auto; padding:14px; }
+.window-resize { width:16px; height:16px; background:var(--border); border-radius:3px; cursor:se-resize; position:absolute; bottom:4px; right:4px; }
+
+/* Friends list */
+.friend-item { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; margin-bottom:8px; gap:8px; }
+.friend-name { font-size:13px; font-weight:500; }
+.friend-status { font-size:11px; color:var(--muted); }
+
+/* Chat */
+.chat-messages { display:flex; flex-direction:column; gap:8px; padding:12px; overflow-y:auto; flex:1; }
+.chat-msg { max-width:80%; padding:8px 12px; border-radius:12px; font-size:13px; line-height:1.5; }
+.chat-msg.mine { background:var(--accent); color:#0e0e11; align-self:flex-end; border-bottom-right-radius:4px; }
+.chat-msg.theirs { background:var(--surface2); color:var(--text); align-self:flex-start; border-bottom-left-radius:4px; }
+.chat-msg-time { font-size:10px; opacity:.6; margin-top:3px; }
+.chat-input-row { display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--border); flex-shrink:0; }
+.chat-input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:10px; color:var(--text); font-family:var(--font-ui); font-size:13px; padding:9px 12px; outline:none; margin-bottom:0; }
+.chat-input:focus { border-color:var(--accent); }
+
+/* Notif badge */
+.notif-badge { position:absolute; top:-4px; right:-4px; background:var(--danger); color:#fff; font-size:10px; width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; }
+
+/* Section boxes */
+.section-box { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.section-title { font-family:'Syne',sans-serif; font-weight:700; font-size:13px; margin-bottom:8px; }
+
+/* Color swatches */
+.color-swatches { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.swatch { width:32px; height:32px; border-radius:50%; cursor:pointer; border:3px solid transparent; transition:all .18s; }
+.swatch.active { border-color:var(--text); }
+.swatch:hover { transform:scale(1.15); }
+
+/* Shared task badge */
+.shared-badge { font-size:10px; background:rgba(200,240,74,.1); color:var(--accent); border:1px solid rgba(200,240,74,.2); border-radius:6px; padding:2px 6px; margin-left:6px; }
+
+.hidden { display: none !important; }
 </style>
 </head>
 <body>
 <div id="app">
 
   <!-- Loading -->
-  <div id="screen-loading">
-    <div class="spinner"></div>
-    <div style="color:var(--muted);font-size:12px">Loading…</div>
-  </div>
+  <div id="screen-loading"><div class="spinner"></div><div style="color:var(--muted);font-size:12px">Loading…</div></div>
 
   <!-- Login -->
   <div id="view-login" class="card hidden">
@@ -144,9 +206,9 @@
     <label>Username</label>
     <input type="text" id="signup-username" placeholder="choose a username">
     <label>Email</label>
-    <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email">
+    <input type="email" id="signup-email" placeholder="you@example.com">
     <label>Password</label>
-    <input type="password" id="signup-pass" placeholder="••••••••" autocomplete="new-password">
+    <input type="password" id="signup-pass" placeholder="••••••••">
     <label>Confirm Password</label>
     <input type="password" id="signup-confirm" placeholder="••••••••">
     <button class="btn btn-primary" id="signup-btn" onclick="doSignup()">Create account →</button>
@@ -160,8 +222,11 @@
         <div class="dash-title">Hey, <span id="dash-username"></span></div>
         <div style="color:var(--muted);font-size:12px;margin-top:3px" id="dash-summary"></div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-icon" title="Add task" onclick="toggleAddForm()">＋</button>
+        <button class="btn btn-icon" title="Sticky note" onclick="addStickyNote()">📌</button>
+        <button class="btn btn-icon" title="Friends" onclick="openFriendsWindow()" style="position:relative">👥<span id="friend-notif" class="notif-badge hidden"></span></button>
+        <button class="btn btn-icon" title="Customize" onclick="openCustomize()">🎨</button>
         <button class="btn btn-icon" title="Settings" onclick="openSettings()">⚙</button>
         <button id="admin-btn" class="btn btn-icon hidden" title="Admin" onclick="openAdminPanel()">🛠</button>
         <button class="btn btn-ghost" onclick="openLogout()">logout</button>
@@ -181,21 +246,42 @@
     <div id="task-list"></div>
   </div>
 
-  <!-- Edit Modal -->
+  <!-- Sticky notes container -->
+  <div id="sticky-container"></div>
+
+  <!-- Edit Task Modal -->
   <div id="edit-overlay" class="overlay hidden">
     <div class="modal">
       <h3>Edit task</h3>
       <div id="edit-notice"></div>
       <label>Task name</label>
-      <input type="text" id="edit-name" placeholder="Task name">
+      <input type="text" id="edit-name">
       <label>Due date</label>
       <input type="date" id="edit-date">
       <div class="modal-btns">
-        <button class="btn btn-primary" onclick="saveEdit()">Save changes</button>
+        <button class="btn btn-primary" onclick="saveEdit()">Save</button>
         <button class="btn btn-ghost" onclick="closeEdit()">Cancel</button>
       </div>
       <hr class="divider">
-      <button class="btn btn-danger" style="width:100%" onclick="deleteTask()">Delete task</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="openShareTask()">Share with friend</button>
+        <button class="btn btn-danger" style="flex:1" onclick="deleteTask()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share Task Modal -->
+  <div id="share-overlay" class="overlay hidden">
+    <div class="modal">
+      <h3>Share Task</h3>
+      <div id="share-notice"></div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Send this task to a friend. They'll receive a request to add it.</p>
+      <label>Select Friend</label>
+      <select id="share-friend-select" style="margin-bottom:14px"></select>
+      <div class="modal-btns">
+        <button class="btn btn-primary" onclick="sendTaskShare()">Send Task</button>
+        <button class="btn btn-ghost" onclick="closeShareTask()">Cancel</button>
+      </div>
     </div>
   </div>
 
@@ -211,7 +297,7 @@
     </div>
   </div>
 
-  <!-- Settings -->
+  <!-- Settings Modal -->
   <div id="settings-overlay" class="overlay hidden">
     <div class="modal" style="max-width:720px;width:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
@@ -219,53 +305,91 @@
         <button class="btn btn-icon" style="font-size:14px;padding:6px 10px" onclick="closeSettings()">✕</button>
       </div>
       <div id="settings-notice"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
-          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:12px">Change Username</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="section-box">
+          <div class="section-title">Change Username</div>
           <label>New Username</label>
           <input type="text" id="set-username" placeholder="enter new username" style="margin-bottom:8px">
-          <button class="btn btn-primary" style="margin-top:0" onclick="saveUsername()">Update Username</button>
+          <button class="btn btn-primary" style="margin-top:0" onclick="saveUsername()">Update</button>
         </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
-          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:12px">Change Password</div>
+        <div class="section-box">
+          <div class="section-title">Change Password</div>
           <label>Current Password</label>
           <input type="password" id="set-pass-current" placeholder="••••••••" style="margin-bottom:8px">
           <label>New Password</label>
           <input type="password" id="set-pass-new" placeholder="••••••••" style="margin-bottom:8px">
-          <label>Confirm New Password</label>
+          <label>Confirm</label>
           <input type="password" id="set-pass-confirm" placeholder="••••••••" style="margin-bottom:8px">
-          <button class="btn btn-primary" style="margin-top:0" onclick="savePassword()">Update Password</button>
+          <button class="btn btn-primary" style="margin-top:0" onclick="savePassword()">Update</button>
         </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;grid-column:1/-1">
+        <div class="section-box" style="grid-column:1/-1">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px">Email Reminders</div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="email-toggle" onchange="toggleEmailSection()">
-              <span class="toggle-slider"></span>
-            </label>
+            <div class="section-title" style="margin-bottom:0">Email Reminders</div>
+            <label class="toggle-switch"><input type="checkbox" id="email-toggle" onchange="toggleEmailSection()"><span class="toggle-slider"></span></label>
           </div>
           <div style="color:var(--muted);font-size:11px;margin-bottom:12px">Get an email listing tasks due within 3 days.</div>
           <div id="email-section" class="hidden">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
               <div>
                 <label>Email Addresses</label>
                 <input type="text" id="set-email" placeholder="you@example.com, other@example.com" style="margin-bottom:4px">
-                <div style="color:var(--muted);font-size:10px">Separate multiple with commas</div>
+                <div style="color:var(--muted);font-size:10px;margin-bottom:10px">Separate multiple with commas</div>
               </div>
               <div>
                 <label>Frequency</label>
-                <select id="email-frequency" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;padding:11px 14px;outline:none;cursor:pointer">
+                <select id="email-frequency">
                   <option value="daily">Daily (on login)</option>
                   <option value="manual">Manual only</option>
                 </select>
               </div>
             </div>
-            <div style="display:flex;gap:8px;margin-top:12px">
+            <div style="display:flex;gap:8px">
               <button class="btn btn-primary" onclick="saveEmailSettings()">Save</button>
               <button class="btn btn-ghost" onclick="sendReminderEmail()">Send Now</button>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customize Modal -->
+  <div id="customize-overlay" class="overlay hidden">
+    <div class="modal" style="max-width:600px;width:100%">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h3 style="margin-bottom:0">Customize</h3>
+        <button class="btn btn-icon" style="font-size:14px;padding:6px 10px" onclick="closeCustomize()">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <!-- Accent color -->
+        <div class="section-box">
+          <div class="section-title">Accent Color</div>
+          <div class="color-swatches" id="accent-swatches"></div>
+          <label>Custom Color</label>
+          <input type="color" id="custom-accent" value="#c8f04a" style="margin-bottom:0">
+        </div>
+        <!-- Background -->
+        <div class="section-box">
+          <div class="section-title">Background</div>
+          <div class="color-swatches" id="bg-swatches"></div>
+          <label>Image URL</label>
+          <input type="text" id="bg-image-url" placeholder="https://... (image link)" style="margin-bottom:8px">
+          <button class="btn-accent-sm" onclick="applyBgImage()">Apply Image</button>
+        </div>
+        <!-- Font -->
+        <div class="section-box" style="grid-column:1/-1">
+          <div class="section-title">Font</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="setFont('DM Mono')" style="font-family:'DM Mono',monospace">DM Mono (default)</button>
+            <button class="btn btn-ghost btn-sm" onclick="setFont('Inter')" style="font-family:'Inter',sans-serif">Inter</button>
+            <button class="btn btn-ghost btn-sm" onclick="setFont('Playfair Display')" style="font-family:'Playfair Display',serif">Playfair</button>
+            <button class="btn btn-ghost btn-sm" onclick="setFont('system-ui')" style="font-family:system-ui">System UI</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-primary" onclick="saveTheme()">Save Theme</button>
+        <button class="btn btn-ghost" onclick="resetTheme()">Reset to Default</button>
       </div>
     </div>
   </div>
@@ -280,25 +404,18 @@
       <button class="btn btn-ghost" onclick="closeAdminPanel()">← Tasks</button>
     </div>
     <div id="admin-notice"></div>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px">
-      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px">① GitHub Personal Access Token</div>
-      <div style="color:var(--muted);font-size:11px;margin-bottom:14px;line-height:1.6">Create one at <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--accent)">github.com/settings/tokens</a> — enable the <strong style="color:var(--text)">repo</strong> scope.</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="margin-bottom:0;flex:1">
-        <button class="btn btn-ghost" style="white-space:nowrap" onclick="saveToken()">Save Token</button>
-      </div>
-      <div id="token-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+    <div class="section-box">
+      <div class="section-title">① Auto-Sync Status</div>
+      <div style="color:var(--muted);font-size:11px;margin-bottom:10px">Tasks now sync automatically when you add, edit or delete. Last sync: <span id="last-sync-time">never</span></div>
+      <button class="btn btn-ghost btn-sm" onclick="manualSync()">Force Sync Now</button>
     </div>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px">
+    <div class="section-box">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div>
-          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px">② Daily 7am Email (MT)</div>
-          <div style="color:var(--muted);font-size:11px;margin-top:2px">GitHub Actions sends the email every morning at 7am MT.</div>
+          <div class="section-title" style="margin-bottom:2px">② Daily 7am Email (MT)</div>
+          <div style="color:var(--muted);font-size:11px">GitHub Actions sends the email every morning at 7am MT.</div>
         </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="schedule-toggle" onchange="toggleSchedule()">
-          <span class="toggle-slider"></span>
-        </label>
+        <label class="toggle-switch"><input type="checkbox" id="schedule-toggle" onchange="toggleSchedule()"><span class="toggle-slider"></span></label>
       </div>
       <div id="schedule-on" class="hidden" style="margin-top:12px">
         <label>Email Addresses</label>
@@ -306,16 +423,57 @@
         <div style="color:var(--muted);font-size:10px">Separate multiple with commas</div>
       </div>
     </div>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px">
-      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px">③ Sync Tasks to GitHub</div>
-      <div style="color:var(--muted);font-size:11px;margin-bottom:12px;line-height:1.6">Pushes your task list to <code style="color:var(--accent)">tasks.json</code> in your repo.</div>
-      <div id="admin-task-preview" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--muted);margin-bottom:14px;max-height:160px;overflow-y:auto;white-space:pre-wrap;line-height:1.8">Loading…</div>
+    <div class="section-box">
+      <div class="section-title">③ GitHub Token</div>
+      <div style="color:var(--muted);font-size:11px;margin-bottom:12px;line-height:1.6">Token is stored encrypted in your Firebase profile — not visible in the browser. Create one at <a href="https://github.com/settings/tokens/new" target="_blank" style="color:var(--accent)">github.com/settings/tokens</a> with <strong style="color:var(--text)">repo</strong> scope.</div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary" onclick="syncTasks()">Sync Tasks Now</button>
-        <button class="btn btn-ghost" onclick="refreshAdminPreview()">Refresh</button>
+        <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="margin-bottom:0;flex:1">
+        <button class="btn btn-ghost" style="white-space:nowrap" onclick="saveToken()">Save</button>
+      </div>
+      <div id="token-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+    </div>
+    <div style="color:var(--muted);font-size:11px;line-height:1.7">💡 Tasks auto-sync on every change. Token is stored securely in Firebase.</div>
+  </div>
+
+  <!-- Friends Window (draggable) -->
+  <div id="friends-window" class="draggable-window hidden" style="width:320px;height:460px;top:80px;right:30px">
+    <div class="window-header" id="friends-header">
+      <span class="window-title">👥 Friends</span>
+      <div class="window-controls">
+        <button class="win-btn" onclick="switchFriendsTab('friends')">Friends</button>
+        <button class="win-btn" onclick="switchFriendsTab('requests')">Requests <span id="req-count"></span></button>
+        <button class="win-btn" onclick="switchFriendsTab('add')">＋ Add</button>
+        <button class="win-btn" onclick="closeFriendsWindow()">✕</button>
       </div>
     </div>
-    <div style="color:var(--muted);font-size:11px;line-height:1.7">💡 Re-sync whenever you add or edit tasks.</div>
+    <!-- Friends list tab -->
+    <div id="tab-friends" class="window-body"></div>
+    <!-- Requests tab -->
+    <div id="tab-requests" class="window-body hidden"></div>
+    <!-- Add friend tab -->
+    <div id="tab-add" class="window-body hidden">
+      <label>Search by username</label>
+      <input type="text" id="friend-search" placeholder="enter username" style="margin-bottom:8px">
+      <button class="btn-accent-sm" style="width:100%" onclick="searchFriend()">Search</button>
+      <div id="friend-search-result" style="margin-top:12px"></div>
+    </div>
+    <div class="window-resize" id="friends-resize"></div>
+  </div>
+
+  <!-- Chat Window (draggable) -->
+  <div id="chat-window" class="draggable-window hidden" style="width:300px;height:400px;bottom:80px;right:30px;top:auto">
+    <div class="window-header" id="chat-header">
+      <span class="window-title" id="chat-title">💬 Chat</span>
+      <div class="window-controls">
+        <button class="win-btn" onclick="closeChatWindow()">✕</button>
+      </div>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-row">
+      <input type="text" class="chat-input" id="chat-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendChatMsg()">
+      <button class="btn-accent-sm" onclick="sendChatMsg()">Send</button>
+    </div>
+    <div class="window-resize" id="chat-resize"></div>
   </div>
 
 </div>
@@ -324,7 +482,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, where, orderBy, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC1VIWuWwiOIPNTdzLyK5Ge8Q_QboZfjAU",
@@ -338,7 +496,6 @@ const fbApp = initializeApp(firebaseConfig);
 const auth  = getAuth(fbApp);
 const db    = getFirestore(fbApp);
 
-
 const EJS_SERVICE  = 'service_ffhy8ei';
 const EJS_TEMPLATE = 'template_m0p9koe';
 const EJS_KEY      = 'RAg69kIYjCGK9Kcyg';
@@ -347,31 +504,46 @@ emailjs.init(EJS_KEY);
 const ADMIN_USERNAME = 'jbug';
 const GITHUB_OWNER   = 'Jbugness2';
 const GITHUB_REPO    = 'My_Taskr';
-const TOKEN_KEY      = 'taskr_gh_token';
 
+// ── State ──
 let currentUser   = null;
 let userProfile   = null;
 let tasks         = [];
+let stickies      = [];
+let friends       = [];
+let friendRequests = [];
 let editingTaskId = null;
+let sharingTaskId = null;
+let activeChatFriendId = null;
+let chatUnsub     = null;
 let tasksUnsub    = null;
+let stickiesUnsub = null;
+let friendsUnsub  = null;
+let reqUnsub      = null;
+let syncTimeout   = null;
 
 // ── Auth state ──
 onAuthStateChanged(auth, async user => {
   if (user) {
     currentUser = user;
     userProfile = await loadProfile(user.uid);
+    applyTheme(userProfile?.theme);
     subscribeToTasks(user.uid);
+    subscribeToStickies(user.uid);
+    subscribeToFriends(user.uid);
+    subscribeToRequests(user.uid);
     showScreen('dash');
     if (userProfile?.username === ADMIN_USERNAME)
       document.getElementById('admin-btn').classList.remove('hidden');
     maybeAutoEmail();
   } else {
-    currentUser = null; userProfile = null; tasks = [];
-    if (tasksUnsub) { tasksUnsub(); tasksUnsub = null; }
+    currentUser = null; userProfile = null; tasks = []; stickies = [];
+    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, chatUnsub].forEach(u => u && u());
     showScreen('login');
   }
 });
 
+// ── Firestore ──
 async function loadProfile(uid) {
   const snap = await getDoc(doc(db, 'users', uid));
   return snap.exists() ? snap.data() : {};
@@ -380,12 +552,50 @@ async function saveProfile(data) {
   await setDoc(doc(db, 'users', currentUser.uid), data, { merge: true });
   userProfile = { ...userProfile, ...data };
 }
+
 function subscribeToTasks(uid) {
   if (tasksUnsub) tasksUnsub();
   tasksUnsub = onSnapshot(collection(db, 'users', uid, 'tasks'), snap => {
     tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderDash();
   });
+}
+function subscribeToStickies(uid) {
+  if (stickiesUnsub) stickiesUnsub();
+  stickiesUnsub = onSnapshot(collection(db, 'users', uid, 'stickies'), snap => {
+    stickies = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAllStickies();
+  });
+}
+function subscribeToFriends(uid) {
+  if (friendsUnsub) friendsUnsub();
+  friendsUnsub = onSnapshot(
+    query(collection(db, 'friends'), where('users', 'array-contains', uid), where('status','==','accepted')),
+    snap => {
+      friends = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderFriendsList();
+    }
+  );
+}
+function subscribeToRequests(uid) {
+  if (reqUnsub) reqUnsub();
+  reqUnsub = onSnapshot(
+    query(collection(db, 'friends'), where('to','==',uid), where('status','==','pending')),
+    snap => {
+      friendRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const badge = document.getElementById('friend-notif');
+      const count = document.getElementById('req-count');
+      if (friendRequests.length > 0) {
+        badge.textContent = friendRequests.length;
+        badge.classList.remove('hidden');
+        count.textContent = `(${friendRequests.length})`;
+      } else {
+        badge.classList.add('hidden');
+        count.textContent = '';
+      }
+      renderRequestsList();
+    }
+  );
 }
 
 // ── Screens ──
@@ -404,14 +614,9 @@ window.doLogin = async function() {
   const btn   = document.getElementById('login-btn');
   if (!email || !pass) { setNotice('login-notice','Please fill in all fields.','error'); return; }
   btn.disabled = true; btn.textContent = 'Signing in…';
-  try {
-    await signInWithEmailAndPassword(auth, email, pass);
-  } catch(e) {
-    setNotice('login-notice', friendlyError(e), 'error');
-    btn.disabled = false; btn.textContent = 'Sign in →';
-  }
+  try { await signInWithEmailAndPassword(auth, email, pass); }
+  catch(e) { setNotice('login-notice', friendlyError(e), 'error'); btn.disabled=false; btn.textContent='Sign in →'; }
 };
-
 window.doSignup = async function() {
   const username = document.getElementById('signup-username').value.trim();
   const email    = document.getElementById('signup-email').value.trim();
@@ -422,20 +627,17 @@ window.doSignup = async function() {
   if (!email)    { setNotice('signup-notice','Email cannot be empty.','error'); return; }
   if (!pass)     { setNotice('signup-notice','Password cannot be empty.','error'); return; }
   if (pass !== confirm) { setNotice('signup-notice','Passwords do not match.','error'); return; }
-  btn.disabled = true; btn.textContent = 'Creating account…';
+  btn.disabled=true; btn.textContent='Creating…';
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    await setDoc(doc(db, 'users', cred.user.uid), { username, emailSettings: {}, schedSettings: {} });
-  } catch(e) {
-    setNotice('signup-notice', friendlyError(e), 'error');
-    btn.disabled = false; btn.textContent = 'Create account →';
-  }
+    await setDoc(doc(db,'users',cred.user.uid), { username, email, emailSettings:{}, schedSettings:{}, theme:{} });
+    // index username for friend search
+    await setDoc(doc(db,'usernames',username.toLowerCase()), { uid: cred.user.uid, username });
+  } catch(e) { setNotice('signup-notice', friendlyError(e), 'error'); btn.disabled=false; btn.textContent='Create account →'; }
 };
-
 window.doLogout = async function() { closeLogout(); await signOut(auth); };
-
 function friendlyError(e) {
-  return ({ 'auth/invalid-email':'Invalid email.', 'auth/user-not-found':'No account found.', 'auth/wrong-password':'Incorrect password.', 'auth/email-already-in-use':'Email already in use.', 'auth/weak-password':'Password must be at least 6 characters.', 'auth/invalid-credential':'Invalid email or password.', 'auth/too-many-requests':'Too many attempts. Try again later.' })[e.code] || e.message;
+  return ({'auth/invalid-email':'Invalid email.','auth/user-not-found':'No account found.','auth/wrong-password':'Incorrect password.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Password must be at least 6 characters.','auth/invalid-credential':'Invalid email or password.','auth/too-many-requests':'Too many attempts. Try again later.'})[e.code]||e.message;
 }
 
 // ── Dashboard ──
@@ -444,33 +646,62 @@ function renderDash() {
   const sorted = getSortedTasks(tasks);
   const today  = new Date(); today.setHours(0,0,0,0);
   const overdue = sorted.filter(t => parseDate(t.date) < today).length;
-  const due7    = sorted.filter(t => { const d = parseDate(t.date); return d >= today && (d-today) <= 7*86400000; }).length;
+  const due7    = sorted.filter(t => { const d=parseDate(t.date); return d>=today&&(d-today)<=7*86400000; }).length;
   const parts = !sorted.length ? ['no tasks yet'] : [`${sorted.length} task${sorted.length>1?'s':''}`];
   if (overdue) parts.push(`<span style="color:var(--danger)">${overdue} overdue</span>`);
   if (due7)    parts.push(`${due7} due this week`);
   document.getElementById('dash-summary').innerHTML = parts.join(' · ');
-
   const list = document.getElementById('task-list');
-  if (!sorted.length) { list.innerHTML = `<div class="empty-state"><div class="big">📋</div>No tasks yet — hit ＋ to add one.</div>`; return; }
-
+  if (!sorted.length) { list.innerHTML=`<div class="empty-state"><div class="big">📋</div>No tasks yet — hit ＋ to add one.</div>`; return; }
   list.innerHTML = sorted.map(t => {
-    const d = parseDate(t.date);
-    const diffMs = d - today, diffDays = Math.round(diffMs/86400000);
-    const urgClass = diffMs < 0 ? 'urgency-overdue' : diffMs <= 3*86400000 ? 'urgency-soon' : 'urgency-normal';
-    const label = formatDateLabel(d, today);
-    const [daysLabel, daysColor] = diffDays < 0 ? [`${Math.abs(diffDays)}d ago`,'var(--danger)'] : diffDays===0 ? ['today','#f0c040'] : diffDays===1 ? ['1d','#f0c040'] : [`${diffDays}d`,'var(--muted)'];
+    const d = parseDate(t.date), diffMs = d-today, diffDays = Math.round(diffMs/86400000);
+    const urgClass = diffMs<0?'urgency-overdue':diffMs<=3*86400000?'urgency-soon':'urgency-normal';
+    const label = formatDateLabel(d,today);
+    const [dl,dc] = diffDays<0?[`${Math.abs(diffDays)}d ago`,'var(--danger)']:diffDays===0?['today','#f0c040']:diffDays===1?['1d','#f0c040']:[`${diffDays}d`,'var(--muted)'];
+    const shared = t.sharedFrom ? `<span class="shared-badge">shared</span>` : '';
     return `<div class="task-item">
       <div class="task-urgency ${urgClass}"></div>
-      <div class="task-info"><div class="task-name" title="${esc(t.name)}">${esc(t.name)}</div><div class="task-date">${label}</div></div>
+      <div class="task-info"><div class="task-name">${esc(t.name)}${shared}</div><div class="task-date">${label}</div></div>
       <div style="text-align:right;flex-shrink:0;min-width:44px">
-        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:${daysColor}">${daysLabel}</div>
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:${dc}">${dl}</div>
         <div style="font-size:10px;color:var(--muted)">days left</div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <button class="btn btn-icon" style="font-size:13px" onclick="openEdit('${t.id}')">✎</button>
-      </div>
+      <button class="btn btn-icon" style="font-size:13px" onclick="openEdit('${t.id}')">✎</button>
     </div>`;
   }).join('');
+  autoSync();
+}
+
+// ── Auto-Sync ──
+function autoSync() {
+  if (!userProfile?.schedSettings?.enabled) return;
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => doGithubSync(true), 2000);
+}
+
+async function doGithubSync(silent=false) {
+  const token = userProfile?.ghToken;
+  if (!token) return;
+  const ss = userProfile?.schedSettings || {};
+  const payload = {
+    username: userProfile?.username, email: ss.email||'',
+    scheduleEnabled: !!ss.enabled,
+    tasks: tasks.map(t=>({name:t.name,date:t.date})),
+    lastSynced: new Date().toISOString(),
+  };
+  try {
+    const headers = { 'Authorization':`token ${token}`, 'Accept':'application/vnd.github.v3+json', 'Content-Type':'application/json' };
+    let sha=null;
+    const gr = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/tasks.json`,{headers});
+    if (gr.ok) sha = (await gr.json()).sha;
+    const body = { message:`auto-sync: tasks`, content: btoa(unescape(encodeURIComponent(JSON.stringify(payload,null,2)))) };
+    if (sha) body.sha = sha;
+    await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/tasks.json`,{method:'PUT',headers,body:JSON.stringify(body)});
+    const now = new Date().toLocaleTimeString();
+    const el = document.getElementById('last-sync-time');
+    if (el) el.textContent = now;
+    if (!silent) setNotice('admin-notice','✓ Synced!','success');
+  } catch(e) { if (!silent) setNotice('admin-notice',`Error: ${e.message}`,'error'); }
 }
 
 // ── Tasks ──
@@ -479,219 +710,508 @@ window.toggleAddForm = function() {
   f.classList.toggle('hidden');
   if (!f.classList.contains('hidden')) document.getElementById('new-task-name').focus();
 };
-
 window.addTask = async function() {
   const name = document.getElementById('new-task-name').value.trim();
   const date = document.getElementById('new-task-date').value;
-  if (!name) { setNotice('add-notice','Task name is required.','error'); return; }
-  if (!date) { setNotice('add-notice','Due date is required.','error'); return; }
-  await addDoc(collection(db, 'users', currentUser.uid, 'tasks'), { name, date });
-  document.getElementById('new-task-name').value = '';
-  document.getElementById('new-task-date').value = '';
+  if (!name) { setNotice('add-notice','Task name required.','error'); return; }
+  if (!date) { setNotice('add-notice','Due date required.','error'); return; }
+  await addDoc(collection(db,'users',currentUser.uid,'tasks'),{name,date});
+  document.getElementById('new-task-name').value='';
+  document.getElementById('new-task-date').value='';
   clearNotice('add-notice');
   document.getElementById('add-form').classList.add('hidden');
 };
-
 window.openEdit = function(id) {
-  const t = tasks.find(t => t.id === id); if (!t) return;
+  const t = tasks.find(t=>t.id===id); if(!t) return;
   editingTaskId = id;
   document.getElementById('edit-name').value = t.name;
   const d = parseDate(t.date);
-  document.getElementById('edit-date').value = isFinite(d) ? d.toISOString().slice(0,10) : '';
+  document.getElementById('edit-date').value = isFinite(d)?d.toISOString().slice(0,10):'';
   clearNotice('edit-notice');
   document.getElementById('edit-overlay').classList.remove('hidden');
 };
-window.closeEdit = function() { document.getElementById('edit-overlay').classList.add('hidden'); editingTaskId = null; };
+window.closeEdit = function() { document.getElementById('edit-overlay').classList.add('hidden'); editingTaskId=null; };
 window.saveEdit = async function() {
   const name = document.getElementById('edit-name').value.trim();
   const date = document.getElementById('edit-date').value;
-  if (!name) { setNotice('edit-notice','Task name cannot be empty.','error'); return; }
-  if (!date) { setNotice('edit-notice','Please choose a due date.','error'); return; }
-  await updateDoc(doc(db, 'users', currentUser.uid, 'tasks', editingTaskId), { name, date });
+  if (!name) { setNotice('edit-notice','Name required.','error'); return; }
+  if (!date) { setNotice('edit-notice','Date required.','error'); return; }
+  await updateDoc(doc(db,'users',currentUser.uid,'tasks',editingTaskId),{name,date});
   closeEdit();
 };
 window.deleteTask = async function() {
   if (!editingTaskId) return;
-  await deleteDoc(doc(db, 'users', currentUser.uid, 'tasks', editingTaskId));
+  await deleteDoc(doc(db,'users',currentUser.uid,'tasks',editingTaskId));
   closeEdit();
 };
 
+// ── Task Sharing ──
+window.openShareTask = function() {
+  sharingTaskId = editingTaskId;
+  closeEdit();
+  if (!friends.length) { alert('You have no friends yet! Add some first.'); return; }
+  const sel = document.getElementById('share-friend-select');
+  sel.innerHTML = friends.map(f => {
+    const friendUid = f.users.find(u=>u!==currentUser.uid);
+    const name = f.usernames?.[friendUid] || friendUid;
+    return `<option value="${friendUid}">${name}</option>`;
+  }).join('');
+  clearNotice('share-notice');
+  document.getElementById('share-overlay').classList.remove('hidden');
+};
+window.closeShareTask = function() { document.getElementById('share-overlay').classList.add('hidden'); };
+window.sendTaskShare = async function() {
+  const task = tasks.find(t=>t.id===sharingTaskId); if(!task) return;
+  const toUid = document.getElementById('share-friend-select').value;
+  await addDoc(collection(db,'taskShares'),{
+    from: currentUser.uid, fromUsername: userProfile.username,
+    to: toUid, task: {name:task.name, date:task.date}, status:'pending', createdAt: serverTimestamp()
+  });
+  setNotice('share-notice','Task shared!','success');
+  setTimeout(()=>closeShareTask(),1200);
+};
+
+// Check incoming task shares
+async function checkTaskShares() {
+  const snap = await getDocs(query(collection(db,'taskShares'),where('to','==',currentUser.uid),where('status','==','pending')));
+  snap.forEach(async d => {
+    const share = d.data();
+    if (confirm(`${share.fromUsername} shared a task with you: "${share.task.name}" (due ${share.task.date}). Add it to your tasks?`)) {
+      await addDoc(collection(db,'users',currentUser.uid,'tasks'),{...share.task, sharedFrom: share.fromUsername});
+    }
+    await updateDoc(doc(db,'taskShares',d.id),{status:'seen'});
+  });
+}
+
+// ── Sticky Notes ──
+window.addStickyNote = async function() {
+  const colors = ['#fef08a','#bbf7d0','#bfdbfe','#fecaca','#e9d5ff'];
+  const color  = colors[Math.floor(Math.random()*colors.length)];
+  await addDoc(collection(db,'users',currentUser.uid,'stickies'),{
+    content:'', color, x:120+Math.random()*200, y:120+Math.random()*200, w:220, h:160
+  });
+};
+
+function renderAllStickies() {
+  const container = document.getElementById('sticky-container');
+  // remove old
+  container.querySelectorAll('.sticky-note').forEach(n=>n.remove());
+  stickies.forEach(s => createStickyDOM(s));
+}
+
+function createStickyDOM(s) {
+  const container = document.getElementById('sticky-container');
+  const el = document.createElement('div');
+  el.className = 'sticky-note';
+  el.id = `sticky-${s.id}`;
+  el.style.cssText = `left:${s.x}px;top:${s.y}px;width:${s.w}px;height:${s.h}px;background:${s.color}`;
+  el.innerHTML = `
+    <div class="sticky-header">
+      <span class="sticky-title">📌 Note</span>
+      <div class="sticky-actions">
+        <button class="sticky-btn" onclick="deleteStickyNote('${s.id}')">✕</button>
+      </div>
+    </div>
+    <textarea class="sticky-body" placeholder="Type your note…" onblur="saveStickyContent('${s.id}',this.value)">${esc(s.content||'')}</textarea>
+    <div class="sticky-resize"></div>`;
+  container.appendChild(el);
+  makeDraggable(el, el.querySelector('.sticky-header'), s.id, 'sticky');
+  makeResizable(el, el.querySelector('.sticky-resize'), s.id, 'sticky');
+}
+
+window.deleteStickyNote = async function(id) {
+  await deleteDoc(doc(db,'users',currentUser.uid,'stickies',id));
+};
+window.saveStickyContent = async function(id, content) {
+  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{content});
+};
+
+// ── Friends ──
+window.openFriendsWindow = function() {
+  document.getElementById('friends-window').classList.remove('hidden');
+  switchFriendsTab('friends');
+  checkTaskShares();
+};
+window.closeFriendsWindow = function() { document.getElementById('friends-window').classList.add('hidden'); };
+
+window.switchFriendsTab = function(tab) {
+  ['friends','requests','add'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('hidden', t!==tab);
+  });
+};
+
+window.searchFriend = async function() {
+  const q = document.getElementById('friend-search').value.trim().toLowerCase();
+  const res = document.getElementById('friend-search-result');
+  if (!q) { res.innerHTML='<div style="color:var(--muted);font-size:12px">Enter a username.</div>'; return; }
+  if (q === userProfile.username.toLowerCase()) { res.innerHTML='<div style="color:var(--muted);font-size:12px">That\'s you!</div>'; return; }
+  const snap = await getDoc(doc(db,'usernames',q));
+  if (!snap.exists()) { res.innerHTML='<div style="color:var(--muted);font-size:12px">User not found.</div>'; return; }
+  const found = snap.data();
+  const alreadyFriend = friends.some(f=>f.users.includes(found.uid));
+  if (alreadyFriend) { res.innerHTML=`<div style="color:var(--muted);font-size:12px">Already friends with ${found.username}.</div>`; return; }
+  res.innerHTML = `<div class="friend-item">
+    <div><div class="friend-name">${esc(found.username)}</div></div>
+    <button class="btn-accent-sm" onclick="sendFriendRequest('${found.uid}','${found.username}')">Add Friend</button>
+  </div>`;
+};
+
+window.sendFriendRequest = async function(toUid, toUsername) {
+  await addDoc(collection(db,'friends'),{
+    from: currentUser.uid, fromUsername: userProfile.username,
+    to: toUid, toUsername,
+    users: [currentUser.uid, toUid],
+    status: 'pending',
+    createdAt: serverTimestamp()
+  });
+  document.getElementById('friend-search-result').innerHTML = `<div style="color:var(--accent);font-size:12px">Friend request sent to ${esc(toUsername)}!</div>`;
+};
+
+function renderFriendsList() {
+  const el = document.getElementById('tab-friends');
+  if (!friends.length) { el.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:16px">No friends yet — add some!</div>`; return; }
+  el.innerHTML = friends.map(f => {
+    const friendUid = f.users.find(u=>u!==currentUser.uid);
+    const name = f.usernames?.[friendUid] || f.fromUsername===userProfile.username ? f.toUsername : f.fromUsername;
+    return `<div class="friend-item">
+      <div><div class="friend-name">${esc(name)}</div></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-accent-sm" onclick="openChat('${friendUid}','${esc(name)}')">💬 Chat</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderRequestsList() {
+  const el = document.getElementById('tab-requests');
+  if (!friendRequests.length) { el.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:16px">No pending requests.</div>`; return; }
+  el.innerHTML = friendRequests.map(r => `
+    <div class="friend-item">
+      <div><div class="friend-name">${esc(r.fromUsername)}</div><div class="friend-status">wants to be friends</div></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-accent-sm" onclick="acceptFriendReq('${r.id}','${r.from}','${r.fromUsername}')">✓</button>
+        <button class="win-btn" onclick="declineFriendReq('${r.id}')">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+window.acceptFriendReq = async function(reqId, fromUid, fromUsername) {
+  await updateDoc(doc(db,'friends',reqId),{
+    status:'accepted',
+    usernames:{ [currentUser.uid]: userProfile.username, [fromUid]: fromUsername }
+  });
+};
+window.declineFriendReq = async function(reqId) {
+  await deleteDoc(doc(db,'friends',reqId));
+};
+
+// ── Chat ──
+window.openChat = function(friendUid, friendName) {
+  activeChatFriendId = friendUid;
+  document.getElementById('chat-title').textContent = `💬 ${friendName}`;
+  document.getElementById('chat-window').classList.remove('hidden');
+  // Build chat ID (sorted so both users get same ID)
+  const chatId = [currentUser.uid, friendUid].sort().join('_');
+  if (chatUnsub) chatUnsub();
+  chatUnsub = onSnapshot(
+    query(collection(db,'chats',chatId,'messages'), orderBy('ts')),
+    snap => {
+      const msgs = snap.docs.map(d=>({id:d.id,...d.data()}));
+      const container = document.getElementById('chat-messages');
+      container.innerHTML = msgs.map(m => {
+        const mine = m.from === currentUser.uid;
+        const time = m.ts?.toDate ? m.ts.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+        return `<div class="chat-msg ${mine?'mine':'theirs'}">
+          ${esc(m.text)}
+          <div class="chat-msg-time">${time}</div>
+        </div>`;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+  );
+};
+window.closeChatWindow = function() {
+  document.getElementById('chat-window').classList.add('hidden');
+  if (chatUnsub) { chatUnsub(); chatUnsub=null; }
+  activeChatFriendId = null;
+};
+window.sendChatMsg = async function() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text || !activeChatFriendId) return;
+  const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
+  await addDoc(collection(db,'chats',chatId,'messages'),{
+    from: currentUser.uid, text, ts: serverTimestamp()
+  });
+  input.value = '';
+};
+
+// ── Customize ──
+const ACCENT_PRESETS = ['#c8f04a','#60a5fa','#f472b6','#fb923c','#34d399','#e879f9','#facc15','#f87171'];
+const BG_PRESETS     = ['#0e0e11','#0f172a','#1a0a0a','#0a0a1a','#0a1a0a','#1a1a0a','#f8fafc','#1e1b4b'];
+
+window.openCustomize = function() {
+  // Accent swatches
+  const as = document.getElementById('accent-swatches');
+  as.innerHTML = ACCENT_PRESETS.map(c=>`<div class="swatch ${getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()===c?'active':''}" style="background:${c}" onclick="previewAccent('${c}')"></div>`).join('');
+  // BG swatches
+  const bs = document.getElementById('bg-swatches');
+  bs.innerHTML = BG_PRESETS.map(c=>`<div class="swatch" style="background:${c};border:2px solid #444" onclick="previewBg('${c}')"></div>`).join('');
+  document.getElementById('customize-overlay').classList.remove('hidden');
+};
+window.closeCustomize = function() { document.getElementById('customize-overlay').classList.add('hidden'); };
+
+window.previewAccent = function(c) {
+  document.documentElement.style.setProperty('--accent',c);
+  document.getElementById('custom-accent').value = c;
+};
+window.previewBg = function(c) {
+  document.documentElement.style.setProperty('--bg',c);
+  document.documentElement.style.setProperty('--bg-image','none');
+  document.body.style.backgroundImage = 'none';
+  document.body.style.backgroundColor = c;
+};
+window.applyBgImage = function() {
+  const url = document.getElementById('bg-image-url').value.trim();
+  if (!url) return;
+  document.documentElement.style.setProperty('--bg-image',`url('${url}')`);
+  document.body.style.backgroundImage = `url('${url}')`;
+};
+window.setFont = function(font) {
+  document.documentElement.style.setProperty('--font-ui',`'${font}',monospace`);
+};
+window.saveTheme = async function() {
+  const theme = {
+    accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+    bg: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+    bgImage: document.getElementById('bg-image-url').value.trim(),
+    font: getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim(),
+  };
+  await saveProfile({ theme });
+  setNotice('settings-notice','Theme saved!','success');
+  closeCustomize();
+};
+window.resetTheme = async function() {
+  await saveProfile({ theme: {} });
+  applyTheme({});
+  closeCustomize();
+};
+function applyTheme(t) {
+  if (!t) return;
+  if (t.accent) document.documentElement.style.setProperty('--accent', t.accent);
+  if (t.bg)     { document.documentElement.style.setProperty('--bg', t.bg); document.body.style.backgroundColor = t.bg; }
+  if (t.bgImage){ document.documentElement.style.setProperty('--bg-image',`url('${t.bgImage}')`); document.body.style.backgroundImage=`url('${t.bgImage}')`; }
+  if (t.font)   document.documentElement.style.setProperty('--font-ui', t.font);
+}
+
 // ── Settings ──
 window.openSettings = function() {
-  const p = userProfile || {}, es = p.emailSettings || {};
-  document.getElementById('set-username').value = p.username || '';
-  ['set-pass-current','set-pass-new','set-pass-confirm'].forEach(id => document.getElementById(id).value = '');
+  const p=userProfile||{}, es=p.emailSettings||{};
+  document.getElementById('set-username').value = p.username||'';
+  ['set-pass-current','set-pass-new','set-pass-confirm'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('email-toggle').checked = !!es.enabled;
-  document.getElementById('set-email').value = es.address || '';
-  document.getElementById('email-frequency').value = es.frequency || 'daily';
-  document.getElementById('email-section').classList.toggle('hidden', !es.enabled);
+  document.getElementById('set-email').value = es.address||'';
+  document.getElementById('email-frequency').value = es.frequency||'daily';
+  document.getElementById('email-section').classList.toggle('hidden',!es.enabled);
   clearNotice('settings-notice');
   document.getElementById('settings-overlay').classList.remove('hidden');
 };
 window.closeSettings = function() { document.getElementById('settings-overlay').classList.add('hidden'); };
 window.toggleEmailSection = function() {
-  document.getElementById('email-section').classList.toggle('hidden', !document.getElementById('email-toggle').checked);
+  document.getElementById('email-section').classList.toggle('hidden',!document.getElementById('email-toggle').checked);
 };
 window.saveUsername = async function() {
-  const newName = document.getElementById('set-username').value.trim();
-  if (!newName) { setNotice('settings-notice','Username cannot be empty.','error'); return; }
-  await saveProfile({ username: newName });
-  document.getElementById('dash-username').textContent = newName;
+  const n = document.getElementById('set-username').value.trim();
+  if (!n) { setNotice('settings-notice','Username cannot be empty.','error'); return; }
+  await saveProfile({ username: n });
+  await setDoc(doc(db,'usernames',n.toLowerCase()),{uid:currentUser.uid,username:n});
+  document.getElementById('dash-username').textContent = n;
   setNotice('settings-notice','Username updated!','success');
 };
 window.savePassword = async function() {
-  const current = document.getElementById('set-pass-current').value;
-  const newPass  = document.getElementById('set-pass-new').value;
-  const confirm  = document.getElementById('set-pass-confirm').value;
-  if (!current) { setNotice('settings-notice','Enter your current password.','error'); return; }
-  if (!newPass)  { setNotice('settings-notice','New password cannot be empty.','error'); return; }
-  if (newPass !== confirm) { setNotice('settings-notice','Passwords do not match.','error'); return; }
+  const cur=document.getElementById('set-pass-current').value;
+  const np =document.getElementById('set-pass-new').value;
+  const con=document.getElementById('set-pass-confirm').value;
+  if (!cur){setNotice('settings-notice','Enter current password.','error');return;}
+  if (!np) {setNotice('settings-notice','New password required.','error');return;}
+  if (np!==con){setNotice('settings-notice','Passwords don\'t match.','error');return;}
   try {
-    await reauthenticateWithCredential(currentUser, EmailAuthProvider.credential(currentUser.email, current));
-    await updatePassword(currentUser, newPass);
-    ['set-pass-current','set-pass-new','set-pass-confirm'].forEach(id => document.getElementById(id).value = '');
+    await reauthenticateWithCredential(currentUser,EmailAuthProvider.credential(currentUser.email,cur));
+    await updatePassword(currentUser,np);
+    ['set-pass-current','set-pass-new','set-pass-confirm'].forEach(id=>document.getElementById(id).value='');
     setNotice('settings-notice','Password updated!','success');
-  } catch(e) { setNotice('settings-notice', friendlyError(e), 'error'); }
+  } catch(e){setNotice('settings-notice',friendlyError(e),'error');}
 };
 window.saveEmailSettings = async function() {
-  const address   = document.getElementById('set-email').value.trim();
-  const frequency = document.getElementById('email-frequency').value;
-  const enabled   = document.getElementById('email-toggle').checked;
-  if (enabled && !address) { setNotice('settings-notice','Please enter an email address.','error'); return; }
-  await saveProfile({ emailSettings: { enabled, address, frequency, lastSent: userProfile?.emailSettings?.lastSent || null }});
+  const address=document.getElementById('set-email').value.trim();
+  const frequency=document.getElementById('email-frequency').value;
+  const enabled=document.getElementById('email-toggle').checked;
+  if(enabled&&!address){setNotice('settings-notice','Enter an email address.','error');return;}
+  await saveProfile({emailSettings:{enabled,address,frequency,lastSent:userProfile?.emailSettings?.lastSent||null}});
   setNotice('settings-notice','Email settings saved!','success');
 };
-
-// ── Email ──
-function getAddresses(str) { return (str||'').split(',').map(e=>e.trim()).filter(Boolean); }
-function buildTaskList() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const soon  = getSortedTasks(tasks).filter(t => Math.round((parseDate(t.date)-today)/86400000) <= 3);
-  if (!soon.length) return null;
-  return soon.map(t => {
-    const diff = Math.round((parseDate(t.date)-today)/86400000);
-    return `• ${t.name} — ${diff<0?`OVERDUE (${Math.abs(diff)}d ago)`:diff===0?'Due TODAY':diff===1?'Due TOMORROW':`Due in ${diff} days`}`;
-  }).join('\n');
-}
-function sendToAll(addresses, taskList, onDone, onFail) {
-  const time = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  const username = userProfile?.username || 'there';
-  Promise.all(addresses.map(addr => emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-    name: username, username, time,
-    message: 'Here are your upcoming tasks due within the next 3 days:',
-    task_list: taskList, to_email: addr,
-  }))).then(onDone).catch(onFail);
-}
-window.sendReminderEmail = function() {
-  const es = userProfile?.emailSettings || {};
-  const addresses = getAddresses(es.address);
-  if (!addresses.length) { setNotice('settings-notice','Save an email address first.','error'); return; }
-  const taskList = buildTaskList();
-  if (!taskList) { setNotice('settings-notice','No tasks due within 3 days!','success'); return; }
-  setNotice('settings-notice',`Sending…`,'info');
-  sendToAll(addresses, taskList, async () => {
-    await saveProfile({ emailSettings: { ...userProfile.emailSettings, lastSent: Date.now() }});
-    setNotice('settings-notice',`✓ Sent to ${addresses.length} address${addresses.length>1?'es':''}!`,'success');
-  }, err => setNotice('settings-notice',`Failed: ${err.text||err.message}`,'error'));
-};
-async function maybeAutoEmail() {
-  const es = userProfile?.emailSettings || {};
-  const addresses = getAddresses(es.address);
-  if (!es.enabled || es.frequency !== 'daily' || !addresses.length) return;
-  const today = new Date(); today.setHours(0,0,0,0);
-  if (es.lastSent && new Date(es.lastSent) >= today) return;
-  const taskList = buildTaskList();
-  if (!taskList) return;
-  sendToAll(addresses, taskList, async () => {
-    await saveProfile({ emailSettings: { ...es, lastSent: Date.now() }});
-  }, ()=>{});
-}
 
 // ── Admin ──
 window.openAdminPanel = function() {
   showScreen('admin');
-  if (localStorage.getItem(TOKEN_KEY)) document.getElementById('token-status').textContent = '✓ Token already saved';
-  const ss = userProfile?.schedSettings || {};
-  document.getElementById('schedule-toggle').checked = !!ss.enabled;
-  document.getElementById('sched-email').value = ss.email || userProfile?.emailSettings?.address || '';
-  document.getElementById('schedule-on').classList.toggle('hidden', !ss.enabled);
-  refreshAdminPreview();
+  if (userProfile?.ghToken) document.getElementById('token-status').textContent='✓ Token saved securely in Firebase';
+  const ss=userProfile?.schedSettings||{};
+  document.getElementById('schedule-toggle').checked=!!ss.enabled;
+  document.getElementById('sched-email').value=ss.email||userProfile?.emailSettings?.address||'';
+  document.getElementById('schedule-on').classList.toggle('hidden',!ss.enabled);
 };
 window.closeAdminPanel = function() { showScreen('dash'); };
 window.toggleSchedule = async function() {
-  const on = document.getElementById('schedule-toggle').checked;
-  document.getElementById('schedule-on').classList.toggle('hidden', !on);
-  await saveProfile({ schedSettings: { enabled: on, email: document.getElementById('sched-email').value.trim() }});
+  const on=document.getElementById('schedule-toggle').checked;
+  document.getElementById('schedule-on').classList.toggle('hidden',!on);
+  await saveProfile({schedSettings:{enabled:on,email:document.getElementById('sched-email').value.trim()}});
 };
-window.refreshAdminPreview = function() {
-  document.getElementById('admin-task-preview').textContent =
-    tasks.length ? tasks.map(t=>`• ${t.name}  →  ${t.date}`).join('\n') : 'No tasks found.';
+window.saveToken = async function() {
+  const t=document.getElementById('gh-token').value.trim();
+  if(!t){document.getElementById('token-status').textContent='Enter a token first.';return;}
+  // Store in Firebase profile (not localStorage)
+  await saveProfile({ ghToken: t });
+  document.getElementById('token-status').textContent='✓ Token saved securely in Firebase';
+  document.getElementById('gh-token').value='';
 };
-window.saveToken = function() {
-  const t = document.getElementById('gh-token').value.trim();
-  if (!t) { document.getElementById('token-status').textContent = 'Enter a token first.'; return; }
-  localStorage.setItem(TOKEN_KEY, t);
-  document.getElementById('token-status').textContent = '✓ Token saved';
-  document.getElementById('gh-token').value = '';
-};
-window.syncTasks = async function() {
-  const token = localStorage.getItem(TOKEN_KEY);
-  if (!token) { setNotice('admin-notice','Save your GitHub token first.','error'); return; }
-  const schedOn = document.getElementById('schedule-toggle').checked;
-  const schedEmail = document.getElementById('sched-email').value.trim();
-  if (schedOn && !schedEmail) { setNotice('admin-notice','Enter an email address.','error'); return; }
-  await saveProfile({ schedSettings: { enabled: schedOn, email: schedEmail }});
-  const payload = { username: userProfile?.username, email: schedEmail, scheduleEnabled: schedOn, tasks: tasks.map(t=>({name:t.name,date:t.date})), lastSynced: new Date().toISOString() };
-  setNotice('admin-notice','Syncing…','info');
-  try {
-    const headers = { 'Authorization':`token ${token}`, 'Accept':'application/vnd.github.v3+json', 'Content-Type':'application/json' };
-    let sha = null;
-    const gr = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/tasks.json`, { headers });
-    if (gr.ok) sha = (await gr.json()).sha;
-    const body = { message:`sync: tasks.json`, content: btoa(unescape(encodeURIComponent(JSON.stringify(payload,null,2)))) };
-    if (sha) body.sha = sha;
-    const pr = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/tasks.json`, { method:'PUT', headers, body: JSON.stringify(body) });
-    if (pr.ok) { setNotice('admin-notice','✓ Synced to GitHub!','success'); refreshAdminPreview(); }
-    else { const e = await pr.json(); setNotice('admin-notice',`GitHub error: ${e.message}`,'error'); }
-  } catch(e) { setNotice('admin-notice',`Error: ${e.message}`,'error'); }
-};
+window.manualSync = function() { doGithubSync(false); };
 
-// ── Logout modals ──
-window.openLogout  = function() { document.getElementById('logout-overlay').classList.remove('hidden'); };
-window.closeLogout = function() { document.getElementById('logout-overlay').classList.add('hidden'); };
-
-// ── Helpers ──
-function parseDate(str) {
-  if (!str) return new Date(8640000000000000);
-  if (str.length===10 && str[4]==='-') return new Date(str+'T00:00:00');
-  const p = str.split('-');
-  return p.length===3 ? new Date(`${p[2]}-${p[1]}-${p[0]}T00:00:00`) : new Date(8640000000000000);
+// ── Email ──
+function getAddresses(str){return(str||'').split(',').map(e=>e.trim()).filter(Boolean);}
+function buildTaskList(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const soon=getSortedTasks(tasks).filter(t=>Math.round((parseDate(t.date)-today)/86400000)<=3);
+  if(!soon.length)return null;
+  return soon.map(t=>{const d=Math.round((parseDate(t.date)-today)/86400000);return`• ${t.name} — ${d<0?`OVERDUE (${Math.abs(d)}d ago)`:d===0?'Due TODAY':d===1?'Due TOMORROW':`Due in ${d} days`}`;}).join('\n');
 }
-function getSortedTasks(arr) { return [...arr].sort((a,b)=>parseDate(a.date)-parseDate(b.date)); }
-function formatDateLabel(d, today) {
-  const diff = Math.round((d-today)/86400000);
-  const raw  = d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
-  if (diff<0)   return `<span style="color:var(--danger)">overdue · ${raw}</span>`;
-  if (diff===0) return `<span style="color:#f0c040">due today</span>`;
-  if (diff===1) return `<span style="color:#f0c040">due tomorrow · ${raw}</span>`;
-  return raw;
+function sendToAll(addresses,taskList,onDone,onFail){
+  const time=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const username=userProfile?.username||'there';
+  Promise.all(addresses.map(addr=>emailjs.send(EJS_SERVICE,EJS_TEMPLATE,{name:username,username,time,message:'Here are your upcoming tasks due within the next 3 days:',task_list:taskList,to_email:addr}))).then(onDone).catch(onFail);
 }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-function setNotice(id,msg,type) { const el=document.getElementById(id); if(el) el.innerHTML=`<div class="notice ${type}">${msg}</div>`; }
-function clearNotice(id) { const el=document.getElementById(id); if(el) el.innerHTML=''; }
+window.sendReminderEmail=function(){
+  const es=userProfile?.emailSettings||{};
+  const addresses=getAddresses(es.address);
+  if(!addresses.length){setNotice('settings-notice','Save an email address first.','error');return;}
+  const taskList=buildTaskList();
+  if(!taskList){setNotice('settings-notice','No tasks due within 3 days!','success');return;}
+  setNotice('settings-notice','Sending…','info');
+  sendToAll(addresses,taskList,async()=>{
+    await saveProfile({emailSettings:{...userProfile.emailSettings,lastSent:Date.now()}});
+    setNotice('settings-notice',`✓ Sent to ${addresses.length} address${addresses.length>1?'es':''}!`,'success');
+  },err=>setNotice('settings-notice',`Failed: ${err.text||err.message}`,'error'));
+};
+async function maybeAutoEmail(){
+  const es=userProfile?.emailSettings||{};
+  const addresses=getAddresses(es.address);
+  if(!es.enabled||es.frequency!=='daily'||!addresses.length)return;
+  const today=new Date();today.setHours(0,0,0,0);
+  if(es.lastSent&&new Date(es.lastSent)>=today)return;
+  const taskList=buildTaskList();
+  if(!taskList)return;
+  sendToAll(addresses,taskList,async()=>{await saveProfile({emailSettings:{...es,lastSent:Date.now()}});},()=>{});
+}
 
-document.addEventListener('keydown', e => {
-  if (e.key==='Escape') { closeEdit(); closeSettings(); closeLogout(); }
-  if (e.key==='Enter') {
-    if (!document.getElementById('view-login').classList.contains('hidden')) doLogin();
-    if (!document.getElementById('view-signup').classList.contains('hidden')) doSignup();
-    if (!document.getElementById('edit-overlay').classList.contains('hidden')) saveEdit();
+// ── Logout ──
+window.openLogout=function(){document.getElementById('logout-overlay').classList.remove('hidden');};
+window.closeLogout=function(){document.getElementById('logout-overlay').classList.add('hidden');};
+
+// ── Drag & Resize ──
+function makeDraggable(el, handle, id, type) {
+  let sx,sy,ex,ey;
+  handle.addEventListener('mousedown', e => {
+    if (e.target.tagName==='BUTTON'||e.target.tagName==='TEXTAREA') return;
+    e.preventDefault();
+    sx=e.clientX-el.offsetLeft; sy=e.clientY-el.offsetTop;
+    const onMove = e => { ex=e.clientX-sx; ey=e.clientY-sy; el.style.left=ex+'px'; el.style.top=ey+'px'; };
+    const onUp   = () => {
+      document.removeEventListener('mousemove',onMove);
+      document.removeEventListener('mouseup',onUp);
+      if(type==='sticky') updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{x:ex,y:ey});
+    };
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+}
+function makeResizable(el, handle, id, type) {
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startW=el.offsetWidth, startH=el.offsetHeight, startX=e.clientX, startY=e.clientY;
+    const onMove = e => {
+      const w=Math.max(180,startW+(e.clientX-startX));
+      const h=Math.max(120,startH+(e.clientY-startY));
+      el.style.width=w+'px'; el.style.height=h+'px';
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove',onMove);
+      document.removeEventListener('mouseup',onUp);
+      if(type==='sticky') updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{w:el.offsetWidth,h:el.offsetHeight});
+    };
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+}
+
+// Make draggable windows
+['friends','chat'].forEach(name => {
+  const win    = document.getElementById(`${name}-window`);
+  const header = document.getElementById(`${name}-header`);
+  const resize = document.getElementById(`${name}-resize`);
+  if (!win||!header) return;
+  let sx,sy;
+  header.addEventListener('mousedown', e => {
+    if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT') return;
+    e.preventDefault();
+    sx=e.clientX-win.offsetLeft; sy=e.clientY-win.offsetTop;
+    const onMove=e=>{win.style.left=(e.clientX-sx)+'px';win.style.top=(e.clientY-sy)+'px';win.style.right='auto';win.style.bottom='auto';};
+    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+  if(resize) {
+    resize.addEventListener('mousedown',e=>{
+      e.preventDefault();
+      const sw=win.offsetWidth,sh=win.offsetHeight,sX=e.clientX,sY=e.clientY;
+      const onMove=e=>{win.style.width=Math.max(260,sw+(e.clientX-sX))+'px';win.style.height=Math.max(200,sh+(e.clientY-sY))+'px';};
+      const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
   }
 });
-['edit-overlay','logout-overlay','settings-overlay'].forEach(id => {
-  document.getElementById(id).addEventListener('click', e => { if (e.target===document.getElementById(id)) document.getElementById(id).classList.add('hidden'); });
+
+// ── Helpers ──
+function parseDate(str){
+  if(!str)return new Date(8640000000000000);
+  if(str.length===10&&str[4]==='-')return new Date(str+'T00:00:00');
+  const p=str.split('-');
+  return p.length===3?new Date(`${p[2]}-${p[1]}-${p[0]}T00:00:00`):new Date(8640000000000000);
+}
+function getSortedTasks(arr){return[...arr].sort((a,b)=>parseDate(a.date)-parseDate(b.date));}
+function formatDateLabel(d,today){
+  const diff=Math.round((d-today)/86400000);
+  const raw=d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  if(diff<0) return`<span style="color:var(--danger)">overdue · ${raw}</span>`;
+  if(diff===0)return`<span style="color:#f0c040">due today</span>`;
+  if(diff===1)return`<span style="color:#f0c040">due tomorrow · ${raw}</span>`;
+  return raw;
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function setNotice(id,msg,type){const el=document.getElementById(id);if(el)el.innerHTML=`<div class="notice ${type}">${msg}</div>`;}
+function clearNotice(id){const el=document.getElementById(id);if(el)el.innerHTML='';}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeEdit();closeSettings();closeLogout();closeCustomize();closeShareTask();}
+  if(e.key==='Enter'){
+    if(!document.getElementById('view-login').classList.contains('hidden'))doLogin();
+    if(!document.getElementById('view-signup').classList.contains('hidden'))doSignup();
+    if(!document.getElementById('edit-overlay').classList.contains('hidden'))saveEdit();
+  }
+});
+['edit-overlay','logout-overlay','settings-overlay','customize-overlay','share-overlay'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.add('hidden');});
 });
 </script>
 </body>
 </html>
-
