@@ -528,6 +528,15 @@ onAuthStateChanged(auth, async user => {
     currentUser = user;
     userProfile = await loadProfile(user.uid);
     applyTheme(userProfile?.theme);
+
+    // Auto-register username in index if missing
+    if (userProfile?.username) {
+      const key = userProfile.username.toLowerCase();
+      const existing = await getDoc(doc(db, 'usernames', key));
+      if (!existing.exists()) {
+        await setDoc(doc(db, 'usernames', key), { uid: user.uid, username: userProfile.username });
+      }
+    }
     subscribeToTasks(user.uid);
     subscribeToStickies(user.uid);
     subscribeToFriends(user.uid);
@@ -841,18 +850,19 @@ window.switchFriendsTab = function(tab) {
 };
 
 window.searchFriend = async function() {
-  const q = document.getElementById('friend-search').value.trim().toLowerCase();
+  const q = document.getElementById('friend-search').value.trim();
   const res = document.getElementById('friend-search-result');
   if (!q) { res.innerHTML='<div style="color:var(--muted);font-size:12px">Enter a username.</div>'; return; }
-  if (q === userProfile.username.toLowerCase()) { res.innerHTML='<div style="color:var(--muted);font-size:12px">That\'s you!</div>'; return; }
-  const snap = await getDoc(doc(db,'usernames',q));
-  if (!snap.exists()) { res.innerHTML='<div style="color:var(--muted);font-size:12px">User not found.</div>'; return; }
+  if (q.toLowerCase() === userProfile.username.toLowerCase()) { res.innerHTML='<div style="color:var(--muted);font-size:12px">That\'s you!</div>'; return; }
+  res.innerHTML='<div style="color:var(--muted);font-size:12px">Searching…</div>';
+  const snap = await getDoc(doc(db,'usernames',q.toLowerCase()));
+  if (!snap.exists()) { res.innerHTML='<div style="color:var(--muted);font-size:12px">User not found. Make sure they\'ve logged in at least once.</div>'; return; }
   const found = snap.data();
   const alreadyFriend = friends.some(f=>f.users.includes(found.uid));
-  if (alreadyFriend) { res.innerHTML=`<div style="color:var(--muted);font-size:12px">Already friends with ${found.username}.</div>`; return; }
+  if (alreadyFriend) { res.innerHTML=`<div style="color:var(--muted);font-size:12px">Already friends with ${esc(found.username)}.</div>`; return; }
   res.innerHTML = `<div class="friend-item">
     <div><div class="friend-name">${esc(found.username)}</div></div>
-    <button class="btn-accent-sm" onclick="sendFriendRequest('${found.uid}','${found.username}')">Add Friend</button>
+    <button class="btn-accent-sm" onclick="sendFriendRequest('${found.uid}','${esc(found.username)}')">Add Friend</button>
   </div>`;
 };
 
