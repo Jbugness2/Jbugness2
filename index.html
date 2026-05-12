@@ -360,13 +360,14 @@ select { cursor:pointer; }
         <h3 style="margin-bottom:0">Customize</h3>
         <button class="btn btn-icon" style="font-size:14px;padding:6px 10px" onclick="closeCustomize()">✕</button>
       </div>
+      <div id="customize-notice"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <!-- Accent color -->
         <div class="section-box">
           <div class="section-title">Accent Color</div>
           <div class="color-swatches" id="accent-swatches"></div>
           <label>Custom Color</label>
-          <input type="color" id="custom-accent" value="#c8f04a" style="margin-bottom:0">
+          <input type="color" id="custom-accent" value="#c8f04a" style="margin-bottom:0" oninput="previewAccent(this.value)">
         </div>
         <!-- Background -->
         <div class="section-box">
@@ -515,12 +516,13 @@ let friendRequests = [];
 let editingTaskId = null;
 let sharingTaskId = null;
 let activeChatFriendId = null;
-let chatUnsub     = null;
-let tasksUnsub    = null;
+let chatUnsub    = null;
+let tasksUnsub   = null;
 let stickiesUnsub = null;
-let friendsUnsub  = null;
-let reqUnsub      = null;
-let syncTimeout   = null;
+let friendsUnsub = null;
+let reqUnsub     = null;
+let syncTimeout  = null;
+let unreadChats  = new Set(); // tracks which friend UIDs have unread messages
 
 // ── Auth state ──
 onAuthStateChanged(auth, async user => {
@@ -583,8 +585,39 @@ function subscribeToFriends(uid) {
     snap => {
       friends = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderFriendsList();
+      subscribeToUnreadChats(uid);
     }
   );
+}
+
+let chatNotifUnsubs = [];
+function subscribeToUnreadChats(uid) {
+  chatNotifUnsubs.forEach(u => u());
+  chatNotifUnsubs = [];
+  friends.forEach(f => {
+    const friendUid = f.users.find(u => u !== uid);
+    const chatId = [uid, friendUid].sort().join('_');
+    const unsub = onSnapshot(
+      query(collection(db,'chats',chatId,'messages'), orderBy('ts')),
+      snap => {
+        const msgs = snap.docs.map(d => d.data());
+        const lastMsg = msgs[msgs.length-1];
+        // unread if last message is from friend and chat isn't currently open
+        if (lastMsg && lastMsg.from === friendUid && activeChatFriendId !== friendUid) {
+          unreadChats.add(friendUid);
+        } else if (activeChatFriendId === friendUid) {
+          unreadChats.delete(friendUid);
+        }
+        // update friends button badge
+        const btn = document.getElementById('friend-notif');
+        const totalNotifs = friendRequests.length + unreadChats.size;
+        if (totalNotifs > 0) { btn.textContent = totalNotifs; btn.classList.remove('hidden'); }
+        else btn.classList.add('hidden');
+        renderFriendsList();
+      }
+    );
+    chatNotifUnsubs.push(unsub);
+  });
 }
 function subscribeToRequests(uid) {
   if (reqUnsub) reqUnsub();
@@ -882,16 +915,34 @@ function renderFriendsList() {
   if (!friends.length) { el.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:16px">No friends yet — add some!</div>`; return; }
   el.innerHTML = friends.map(f => {
     const friendUid = f.users.find(u => u !== currentUser.uid);
-    // Look up the friend's username from the usernames map on the doc
     const friendName = f.usernames?.[friendUid] || (f.from === currentUser.uid ? f.toUsername : f.fromUsername);
+    const hasUnread = unreadChats.has(friendUid);
     return `<div class="friend-item">
-      <div><div class="friend-name">${esc(friendName)}</div></div>
+      <div>
+        <div class="friend-name">${esc(friendName)} ${hasUnread ? '<span style="color:var(--accent);font-size:11px">● new message</span>' : ''}</div>
+      </div>
       <div style="display:flex;gap:6px">
-        <button class="btn-accent-sm" onclick="openChat('${friendUid}','${esc(friendName)}')">💬 Chat</button>
+        <button class="btn-accent-sm" onclick="openChat('${friendUid}','${esc(friendName)}')">💬${hasUnread?'🔴':''}</button>
+        <button class="win-btn" onclick="removeFriend('${f.id}','${esc(friendName)}')">Remove</button>
+        <button class="win-btn" style="color:var(--danger)" onclick="blockFriend('${f.id}','${friendUid}','${esc(friendName)}')">Block</button>
       </div>
     </div>`;
   }).join('');
 }
+
+window.removeFriend = async function(friendDocId, name) {
+  if (!confirm(`Remove ${name} as a friend?`)) return;
+  await deleteDoc(doc(db, 'friends', friendDocId));
+};
+
+window.blockFriend = async function(friendDocId, friendUid, name) {
+  if (!confirm(`Block ${name}? They won't be able to find or message you.`)) return;
+  await deleteDoc(doc(db, 'friends', friendDocId));
+  // Add to blocked list in profile
+  const blocked = userProfile.blocked || [];
+  blocked.push(friendUid);
+  await saveProfile({ blocked });
+};
 
 function renderRequestsList() {
   const el = document.getElementById('tab-requests');
@@ -973,45 +1024,49 @@ window.openCustomize = function() {
 window.closeCustomize = function() { document.getElementById('customize-overlay').classList.add('hidden'); };
 
 window.previewAccent = function(c) {
-  document.documentElement.style.setProperty('--accent',c);
+  document.documentElement.style.setProperty('--accent', c);
   document.getElementById('custom-accent').value = c;
 };
 window.previewBg = function(c) {
-  document.documentElement.style.setProperty('--bg',c);
-  document.documentElement.style.setProperty('--bg-image','none');
+  document.documentElement.style.setProperty('--bg', c);
   document.body.style.backgroundImage = 'none';
   document.body.style.backgroundColor = c;
+  document.getElementById('bg-image-url').value = '';
 };
 window.applyBgImage = function() {
   const url = document.getElementById('bg-image-url').value.trim();
   if (!url) return;
-  document.documentElement.style.setProperty('--bg-image',`url('${url}')`);
   document.body.style.backgroundImage = `url('${url}')`;
 };
 window.setFont = function(font) {
-  document.documentElement.style.setProperty('--font-ui',`'${font}',monospace`);
+  document.documentElement.style.setProperty('--font-ui', `'${font}', monospace`);
 };
 window.saveTheme = async function() {
   const theme = {
     accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
-    bg: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+    bg: document.body.style.backgroundColor || getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
     bgImage: document.getElementById('bg-image-url').value.trim(),
     font: getComputedStyle(document.documentElement).getPropertyValue('--font-ui').trim(),
   };
   await saveProfile({ theme });
-  setNotice('settings-notice','Theme saved!','success');
-  closeCustomize();
+  setNotice('customize-notice', 'Theme saved!', 'success');
+  setTimeout(() => closeCustomize(), 800);
 };
 window.resetTheme = async function() {
-  await saveProfile({ theme: {} });
-  applyTheme({});
-  closeCustomize();
+  const defaults = { accent:'#c8f04a', bg:'#0e0e11', bgImage:'', font:"'DM Mono', monospace" };
+  await saveProfile({ theme: defaults });
+  applyTheme(defaults);
+  document.getElementById('bg-image-url').value = '';
+  document.getElementById('custom-accent').value = '#c8f04a';
+  setNotice('customize-notice', 'Theme reset!', 'success');
+  setTimeout(() => closeCustomize(), 800);
 };
 function applyTheme(t) {
   if (!t) return;
   if (t.accent) document.documentElement.style.setProperty('--accent', t.accent);
   if (t.bg)     { document.documentElement.style.setProperty('--bg', t.bg); document.body.style.backgroundColor = t.bg; }
-  if (t.bgImage){ document.documentElement.style.setProperty('--bg-image',`url('${t.bgImage}')`); document.body.style.backgroundImage=`url('${t.bgImage}')`; }
+  if (t.bgImage){ document.body.style.backgroundImage = `url('${t.bgImage}')`; }
+  else          { document.body.style.backgroundImage = 'none'; }
   if (t.font)   document.documentElement.style.setProperty('--font-ui', t.font);
 }
 
