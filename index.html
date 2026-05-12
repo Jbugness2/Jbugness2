@@ -1046,6 +1046,9 @@ function renderAllStickies() {
     const s = stickies.find(s=>s.id===activeId);
     if (s) createStickyDOM(s, themed, stackId, idx, ids.length);
   });
+  // re-apply sticky opacity after every render since DOM was rebuilt
+  const stickyOp = userProfile?.theme?.opacity?.sticky;
+  if (stickyOp !== undefined) applyOneOpacity('sticky', stickyOp / 100);
 }
 
 function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
@@ -1089,15 +1092,7 @@ function createStickyDOM(s, themed, stackId=null, stackIdx=0, stackLen=1) {
   makeDraggable(el, el.querySelector('.sticky-header'), s.id, 'sticky');
   makeResizable(el, el.querySelector('.sticky-resize'), s.id, 'sticky');
 
-  // apply saved sticky opacity to background only
-  const op = userProfile?.theme?.opacity?.sticky;
-  if (op !== undefined && stickyColor) {
-    const hex = stickyColor.match(/^#([0-9a-f]{6})$/i);
-    if (hex) {
-      const r=parseInt(hex[1].slice(0,2),16), g=parseInt(hex[1].slice(2,4),16), b=parseInt(hex[1].slice(4,6),16);
-      el.style.backgroundColor = `rgba(${r},${g},${b},${op/100})`;
-    }
-  }
+  // opacity applied after all notes rendered in renderAllStickies()
 }
 
 // Stack navigation
@@ -1691,20 +1686,32 @@ async function mergeStickies(dragId, targetId) {
   const target  = stickies.find(s=>s.id===targetId);
   if (!dragged||!target) return;
 
-  // if target is already in a stack, join that stack
+  // collect all notes being dragged (the whole stack if dragged is stacked, otherwise just itself)
+  const dragGroup = dragged.stackId
+    ? stickies.filter(s=>s.stackId===dragged.stackId)
+    : [dragged];
+
+  // determine the destination stack id
+  let destStackId;
+  let baseOrder;
   if (target.stackId) {
-    const existingStack = target.stackId;
-    const stackNotes = stickies.filter(s=>s.stackId===existingStack);
-    const maxOrder = Math.max(...stackNotes.map(s=>s.stackOrder||0));
-    await updateDoc(doc(db,'users',currentUser.uid,'stickies',dragId),{stackId:existingStack, stackOrder:maxOrder+1});
-    // if dragged was in its own stack, clean it up
-    if (dragged.stackId && dragged.stackId !== existingStack) await unstackSticky(dragId);
+    // target is already in a stack — join it
+    destStackId = target.stackId;
+    const destNotes = stickies.filter(s=>s.stackId===destStackId);
+    baseOrder = Math.max(...destNotes.map(s=>s.stackOrder||0)) + 1;
   } else {
-    // create a new stack
-    const stackId = `stack_${Date.now()}`;
-    await updateDoc(doc(db,'users',currentUser.uid,'stickies',targetId),{stackId, stackOrder:0});
-    await updateDoc(doc(db,'users',currentUser.uid,'stickies',dragId),  {stackId, stackOrder:1});
-    if (dragged.stackId) await unstackSticky(dragId);
+    // target is a lone note — create a new stack, target gets order 0
+    destStackId = `stack_${Date.now()}`;
+    await updateDoc(doc(db,'users',currentUser.uid,'stickies',targetId),{stackId:destStackId, stackOrder:0});
+    baseOrder = 1;
+  }
+
+  // move every note in the drag group into the destination stack
+  for (let i = 0; i < dragGroup.length; i++) {
+    await updateDoc(doc(db,'users',currentUser.uid,'stickies',dragGroup[i].id),{
+      stackId: destStackId,
+      stackOrder: baseOrder + i
+    });
   }
 }
 function makeResizable(el, handle, id, type) {
