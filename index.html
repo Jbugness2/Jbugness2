@@ -881,12 +881,13 @@ function renderFriendsList() {
   const el = document.getElementById('tab-friends');
   if (!friends.length) { el.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:16px">No friends yet — add some!</div>`; return; }
   el.innerHTML = friends.map(f => {
-    const friendUid = f.users.find(u=>u!==currentUser.uid);
-    const name = f.usernames?.[friendUid] || f.fromUsername===userProfile.username ? f.toUsername : f.fromUsername;
+    const friendUid = f.users.find(u => u !== currentUser.uid);
+    // Look up the friend's username from the usernames map on the doc
+    const friendName = f.usernames?.[friendUid] || (f.from === currentUser.uid ? f.toUsername : f.fromUsername);
     return `<div class="friend-item">
-      <div><div class="friend-name">${esc(name)}</div></div>
+      <div><div class="friend-name">${esc(friendName)}</div></div>
       <div style="display:flex;gap:6px">
-        <button class="btn-accent-sm" onclick="openChat('${friendUid}','${esc(name)}')">💬 Chat</button>
+        <button class="btn-accent-sm" onclick="openChat('${friendUid}','${esc(friendName)}')">💬 Chat</button>
       </div>
     </div>`;
   }).join('');
