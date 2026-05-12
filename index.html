@@ -1717,13 +1717,23 @@ async function mergeStickies(dragId, targetId) {
     baseOrder = 1;
   }
 
+  // use the visible dragged note's current DOM size as the standard for the whole stack
+  const dragEl = document.getElementById(`sticky-${dragId}`);
+  const w = dragEl ? dragEl.offsetWidth  : (dragged.w || 230);
+  const h = dragEl ? dragEl.offsetHeight : (dragged.h || 170);
+
   // batch all writes so onSnapshot fires exactly once
   const batch = writeBatch(db);
   if (!target.stackId) {
-    batch.update(doc(db,'users',currentUser.uid,'stickies',targetId), {stackId:destStackId, stackOrder:0});
+    batch.update(doc(db,'users',currentUser.uid,'stickies',targetId), {stackId:destStackId, stackOrder:0, w, h});
+  } else {
+    // resize existing stack members to match
+    stickies.filter(s=>s.stackId===destStackId).forEach(s => {
+      batch.update(doc(db,'users',currentUser.uid,'stickies',s.id), {w, h});
+    });
   }
   dragGroup.forEach((s, i) => {
-    batch.update(doc(db,'users',currentUser.uid,'stickies',s.id), {stackId:destStackId, stackOrder:baseOrder+i});
+    batch.update(doc(db,'users',currentUser.uid,'stickies',s.id), {stackId:destStackId, stackOrder:baseOrder+i, w, h});
   });
   await batch.commit();
 }
@@ -1739,7 +1749,20 @@ function makeResizable(el, handle, id, type) {
     const onUp = () => {
       document.removeEventListener('mousemove',onMove);
       document.removeEventListener('mouseup',onUp);
-      if(type==='sticky') updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{w:el.offsetWidth,h:el.offsetHeight});
+      if(type==='sticky') {
+        const w=el.offsetWidth, h=el.offsetHeight;
+        const s = stickies.find(s=>s.id===id);
+        const batch = writeBatch(db);
+        // resize all notes in the same stack together
+        if (s?.stackId) {
+          stickies.filter(o=>o.stackId===s.stackId).forEach(o => {
+            batch.update(doc(db,'users',currentUser.uid,'stickies',o.id),{w,h});
+          });
+        } else {
+          batch.update(doc(db,'users',currentUser.uid,'stickies',id),{w,h});
+        }
+        batch.commit();
+      }
     };
     document.addEventListener('mousemove',onMove);
     document.addEventListener('mouseup',onUp);
