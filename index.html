@@ -300,14 +300,7 @@ select { cursor:pointer; }
     </div>
 
     <div id="task-list"></div>
-
-    <!-- Calendar toggle -->
-    <div style="display:flex;justify-content:flex-end;margin-top:8px">
-      <button class="btn btn-ghost btn-sm" onclick="toggleCalendar()" id="cal-toggle-btn" style="font-size:11px">📅 Calendar View</button>
-    </div>
-
-    <!-- Calendar -->
-    <div id="calendar-view" class="hidden" style="margin-top:12px">
+    <div id="calendar-view" class="hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <button class="btn btn-icon" style="padding:6px 10px;font-size:14px" onclick="calNav(-1)">◀</button>
         <div id="cal-month-label" style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px"></div>
@@ -323,6 +316,11 @@ select { cursor:pointer; }
         <div style="text-align:center;font-size:10px;color:var(--muted);padding:2px">Sa</div>
       </div>
       <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px"></div>
+    </div>
+
+    <!-- View toggle button -->
+    <div style="display:flex;justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-ghost btn-sm" onclick="toggleCalendar()" id="cal-toggle-btn" style="font-size:11px">📅 Calendar View</button>
     </div>
   </div>
 
@@ -875,9 +873,12 @@ let calOpen  = false;
 
 window.toggleCalendar = function() {
   calOpen = !calOpen;
+  document.getElementById('task-list').classList.toggle('hidden', calOpen);
   document.getElementById('calendar-view').classList.toggle('hidden', !calOpen);
-  document.getElementById('cal-toggle-btn').textContent = calOpen ? '📅 List View' : '📅 Calendar View';
+  document.getElementById('bulk-action-bar').classList.toggle('hidden', true);
+  document.getElementById('cal-toggle-btn').textContent = calOpen ? '☰ List View' : '📅 Calendar View';
   if (calOpen) renderCalendar();
+  else if (selectMode) { selectMode = false; selectedIds.clear(); renderDash(); }
 };
 window.calNav = function(dir) {
   calMonth += dir;
