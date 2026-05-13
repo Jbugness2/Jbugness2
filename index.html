@@ -642,7 +642,7 @@ select { cursor:pointer; }
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, where, orderBy, getDocs, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -840,6 +840,11 @@ function showScreen(name) {
     .forEach(id => document.getElementById(id).classList.add('hidden'));
   const map = { loading:'screen-loading', login:'view-login', signup:'view-signup', dash:'screen-dash', admin:'screen-admin' };
   document.getElementById(map[name]).classList.remove('hidden');
+  // Always reset login button when returning to login screen
+  if (name === 'login') {
+    const btn = document.getElementById('login-btn');
+    if (btn) { btn.disabled = false; btn.textContent = 'Sign in →'; }
+  }
 }
 window.showView = v => { clearNotice('login-notice'); clearNotice('signup-notice'); showScreen(v); };
 
@@ -850,10 +855,7 @@ window.doLogin = async function() {
   const btn   = document.getElementById('login-btn');
   if (!email || !pass) { setNotice('login-notice','Please fill in all fields.','error'); return; }
   btn.disabled = true; btn.textContent = 'Signing in…';
-  try {
-    await setPersistence(auth, browserLocalPersistence);
-    await signInWithEmailAndPassword(auth, email, pass);
-  }
+  try { await signInWithEmailAndPassword(auth, email, pass); }
   catch(e) { setNotice('login-notice', friendlyError(e), 'error'); btn.disabled=false; btn.textContent='Sign in →'; }
 };
 window.doSignup = async function() {
@@ -876,15 +878,17 @@ window.doSignup = async function() {
 };
 window.doLogout = async function() {
   closeLogout();
-  // Clear login fields so browser autofill doesn't resubmit on next page load
+  await signOut(auth);
+  // Nuke every Firebase auth key from localStorage so the session cannot
+  // be restored on the next page load or onAuthStateChanged call.
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('firebase:') || k.includes('firebaseLocalStorage'))
+    .forEach(k => localStorage.removeItem(k));
+  // Also clear the login fields so autofill dots don't appear
   const emailEl = document.getElementById('login-email');
   const passEl  = document.getElementById('login-pass');
   if (emailEl) emailEl.value = '';
   if (passEl)  passEl.value  = '';
-  // Switch to in-memory persistence before signing out so Firebase doesn't
-  // restore the session from localStorage on the next page load.
-  try { await setPersistence(auth, inMemoryPersistence); } catch(_) {}
-  await signOut(auth);
 };
 function friendlyError(e) {
   return ({'auth/invalid-email':'Invalid email.','auth/user-not-found':'No account found.','auth/wrong-password':'Incorrect password.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Password must be at least 6 characters.','auth/invalid-credential':'Invalid email or password.','auth/too-many-requests':'Too many attempts. Try again later.'})[e.code]||e.message;
