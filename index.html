@@ -207,6 +207,20 @@ select { cursor:pointer; }
   border-bottom-color: rgba(200,240,74,0.6) !important;
 }
 
+/* ── Calendar ── */
+.cal-day { background:var(--surface2); border:1px solid var(--border); border-radius:8px; min-height:52px; padding:4px 5px; font-size:11px; transition:border-color .15s; position:relative; }
+.cal-day.today { border-color:var(--accent); }
+.cal-day.other-month { opacity:.35; }
+.cal-day.has-tasks { cursor:pointer; }
+.cal-day.has-tasks:hover { border-color:var(--muted); }
+.cal-day-num { font-size:11px; font-weight:600; margin-bottom:2px; color:var(--muted); }
+.cal-day.today .cal-day-num { color:var(--accent); }
+.cal-task-dot { font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:1px 3px; border-radius:3px; margin-bottom:1px; }
+.cal-task-dot.overdue  { background:rgba(255,92,92,.15); color:var(--danger); }
+.cal-task-dot.due-soon { background:rgba(240,192,64,.15); color:#f0c040; }
+.cal-task-dot.normal   { background:rgba(200,240,74,.1);  color:var(--accent); }
+.cal-more { font-size:10px; color:var(--muted); margin-top:1px; }
+
 .hidden { display: none !important; }
 </style>
 </head>
@@ -286,6 +300,30 @@ select { cursor:pointer; }
     </div>
 
     <div id="task-list"></div>
+
+    <!-- Calendar toggle -->
+    <div style="display:flex;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-ghost btn-sm" onclick="toggleCalendar()" id="cal-toggle-btn" style="font-size:11px">📅 Calendar View</button>
+    </div>
+
+    <!-- Calendar -->
+    <div id="calendar-view" class="hidden" style="margin-top:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <button class="btn btn-icon" style="padding:6px 10px;font-size:14px" onclick="calNav(-1)">◀</button>
+        <div id="cal-month-label" style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px"></div>
+        <button class="btn btn-icon" style="padding:6px 10px;font-size:14px" onclick="calNav(1)">▶</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px">
+        <div style="text-align:center;font-size:10px;color:var(--muted);padding:2px">Su</div>
+        <div style="text-align:center;font-size:10px;color:var(--muted);padding:2px">Mo</div>
+        <div style="text-align:center;font-size:10px;color:var(--muted);padding:2px">Tu</div>
+        <div style="text-align:center;font-size:10px;color:var(--muted);padding:2px">We</div>
+        <div style="text-align:center;font-size:10px;color:var(--muted);padding:2px">Th</div>
+        <div style="text-align:center;font-size:10px;color:var(--muted);padding:2px">Fr</div>
+        <div style="text-align:center;font-size:10px;color:var(--muted);padding:2px">Sa</div>
+      </div>
+      <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px"></div>
+    </div>
   </div>
 
   <!-- Sticky notes container -->
@@ -664,6 +702,7 @@ function subscribeToTasks(uid) {
   tasksUnsub = onSnapshot(collection(db, 'users', uid, 'tasks'), snap => {
     tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderDash();
+    if (calOpen) renderCalendar();
   });
 }
 function subscribeToStickies(uid) {
@@ -828,6 +867,73 @@ function renderDash() {
   }).join('');
   autoSync();
 }
+
+// ── Calendar ──
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let calOpen  = false;
+
+window.toggleCalendar = function() {
+  calOpen = !calOpen;
+  document.getElementById('calendar-view').classList.toggle('hidden', !calOpen);
+  document.getElementById('cal-toggle-btn').textContent = calOpen ? '📅 List View' : '📅 Calendar View';
+  if (calOpen) renderCalendar();
+};
+window.calNav = function(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth=0; calYear++; }
+  if (calMonth < 0)  { calMonth=11; calYear--; }
+  renderCalendar();
+};
+function renderCalendar() {
+  const label = document.getElementById('cal-month-label');
+  const grid  = document.getElementById('cal-grid');
+  if (!label || !grid) return;
+  label.textContent = new Date(calYear, calMonth, 1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const today       = new Date(); today.setHours(0,0,0,0);
+  const firstDay    = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const daysInPrev  = new Date(calYear, calMonth, 0).getDate();
+  const taskMap     = {};
+  tasks.forEach(t => {
+    const d = parseDate(t.date);
+    if (!isFinite(d)) return;
+    const key = d.toISOString().slice(0,10);
+    if (!taskMap[key]) taskMap[key] = [];
+    taskMap[key].push(t);
+  });
+  const cells = [];
+  for (let i=firstDay-1; i>=0; i--) cells.push({day:daysInPrev-i, cur:false});
+  for (let d=1; d<=daysInMonth; d++) cells.push({day:d, cur:true});
+  let next=1;
+  while (cells.length%7!==0) cells.push({day:next++, cur:false});
+  grid.innerHTML = cells.map(c => {
+    const mo = c.cur ? calMonth : (c.day > 15 ? calMonth-1 : calMonth+1);
+    const dateObj = new Date(calYear, mo, c.day); dateObj.setHours(0,0,0,0);
+    const key = dateObj.toISOString().slice(0,10);
+    const dayTasks = taskMap[key] || [];
+    const isToday  = dateObj.getTime()===today.getTime();
+    const cls = ['cal-day', !c.cur?'other-month':'', isToday?'today':'', dayTasks.length?'has-tasks':''].filter(Boolean).join(' ');
+    const dots = dayTasks.slice(0,2).map(t => {
+      const diff = Math.round((dateObj-today)/86400000);
+      const dotCls = diff<0?'overdue':diff<=2?'due-soon':'normal';
+      return '<div class="cal-task-dot '+dotCls+'" title="'+esc(t.name)+'">· '+esc(t.name)+'</div>';
+    }).join('');
+    const more = dayTasks.length>2 ? '<div class="cal-more">+' + (dayTasks.length-2) + ' more</div>' : '';
+    const click = dayTasks.length ? 'onclick="calDayClick(\''+key+'\')"' : '';
+    return '<div class="'+cls+'" '+click+'><div class="cal-day-num">'+c.day+'</div>'+dots+more+'</div>';
+  }).join('');
+}
+window.calDayClick = function(dateKey) {
+  const dayTasks = tasks.filter(t => {
+    const d = parseDate(t.date);
+    return isFinite(d) && d.toISOString().slice(0,10)===dateKey;
+  });
+  if (!dayTasks.length) return;
+  const date = new Date(dateKey+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const names = dayTasks.map(t => '• '+t.name).join('\n');
+  alert('Tasks on '+date+':\n\n'+names);
+};
 
 // ── Select Mode ──
 window.toggleSelectMode = function() {
