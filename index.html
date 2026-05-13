@@ -222,6 +222,23 @@ select { cursor:pointer; }
 .cal-more { font-size:10px; color:var(--muted); margin-top:1px; }
 
 .hidden { display: none !important; }
+
+/* ── Side Panel ── */
+.side-panel-btn {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 20px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; position: relative; transition: all .18s;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3);
+}
+.side-panel-btn:hover { border-color: var(--accent); transform: scale(1.08); }
+.side-panel-toggle {
+  width: 36px; height: 22px; border-radius: 8px; margin-top: 4px;
+  background: var(--surface2); border: 1px solid var(--border);
+  font-size: 13px; cursor: pointer; color: var(--muted); display: flex;
+  align-items: center; justify-content: center; transition: all .18s;
+}
+.side-panel-toggle:hover { color: var(--text); border-color: var(--muted); }
 </style>
 </head>
 <body>
@@ -262,22 +279,26 @@ select { cursor:pointer; }
 
   <!-- Dashboard -->
   <div id="screen-dash" class="card wide hidden">
+    <!-- Top bar: title left, system buttons right -->
     <div class="dash-header">
       <div>
         <div class="dash-title">Hey, <span id="dash-username"></span></div>
         <div style="color:var(--muted);font-size:12px;margin-top:3px" id="dash-summary"></div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-icon" title="Add task" onclick="toggleAddForm()">＋</button>
-        <button class="btn btn-icon" title="Select tasks" id="select-mode-btn" onclick="toggleSelectMode()">☑ Select</button>
-        <button class="btn btn-icon" title="Sticky note" onclick="addStickyNote()">📌</button>
-        <button class="btn btn-icon" title="Friends" onclick="openFriendsWindow()" style="position:relative">👥<span id="friend-notif" class="notif-badge hidden"></span></button>
-        <button class="btn btn-icon" title="Customize" onclick="openCustomize()">🎨</button>
-        <button class="btn btn-icon" title="Settings" onclick="openSettings()">⚙</button>
-        <button id="admin-btn" class="btn btn-icon hidden" title="Admin" onclick="openAdminPanel()">🛠</button>
-        <button class="btn btn-ghost" onclick="openLogout()">logout</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-icon" title="Customize" onclick="openCustomize()" style="font-size:15px;padding:7px 10px">🎨</button>
+        <button class="btn btn-icon" title="Settings" onclick="openSettings()" style="font-size:15px;padding:7px 10px">⚙</button>
+        <button id="admin-btn" class="btn btn-icon hidden" title="Admin" onclick="openAdminPanel()" style="font-size:15px;padding:7px 10px">🛠</button>
+        <button class="btn btn-ghost btn-sm" onclick="openLogout()" style="color:var(--muted);font-size:12px">logout</button>
       </div>
     </div>
+
+    <!-- Task list header: label left, add button right -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Tasks</span>
+      <button class="btn btn-icon" title="Add task" onclick="toggleAddForm()" style="padding:5px 10px;font-size:14px;border-radius:8px">＋ Add</button>
+    </div>
+
     <div id="add-form" class="add-form hidden">
       <label>Task name</label>
       <input type="text" id="new-task-name" placeholder="e.g. Submit assignment">
@@ -290,13 +311,14 @@ select { cursor:pointer; }
     </div>
     <div id="add-notice"></div>
 
-    <!-- Bulk action bar -->
+    <!-- Bulk action bar (appears when any checkbox is ticked) -->
     <div id="bulk-action-bar" class="hidden" style="background:var(--surface2);border:1px solid var(--accent);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span id="bulk-count" style="flex:1;font-size:12px;color:var(--accent);font-weight:600"></span>
       <button class="btn-accent-sm" onclick="selectAll()">All</button>
       <button class="win-btn" onclick="deselectAll()">None</button>
       <button class="btn-accent-sm" onclick="bulkShare()">📤 Share</button>
       <button class="win-btn" style="color:var(--danger)" onclick="bulkDelete()">🗑 Delete</button>
+      <button class="win-btn" onclick="cancelSelectMode()">✕ Cancel</button>
     </div>
 
     <div id="task-list"></div>
@@ -322,6 +344,16 @@ select { cursor:pointer; }
     <div style="display:flex;justify-content:flex-end;margin-top:10px">
       <button class="btn btn-ghost btn-sm" onclick="toggleCalendar()" id="cal-toggle-btn" style="font-size:11px">📅 Calendar View</button>
     </div>
+  </div>
+
+  <!-- Side Panel (sticky notes + friends) -->
+  <div id="side-panel" style="position:fixed;top:50%;transform:translateY(-50%);right:16px;z-index:140;display:flex;flex-direction:column;gap:8px;align-items:center">
+    <button class="side-panel-btn" title="New sticky note" onclick="addStickyNote()">📌</button>
+    <button class="side-panel-btn" title="Friends" onclick="openFriendsWindow()" style="position:relative">
+      👥<span id="friend-notif" class="notif-badge hidden"></span>
+    </button>
+    <!-- Panel side toggle -->
+    <button class="side-panel-toggle" title="Move panel to other side" onclick="togglePanelSide()">⇄</button>
   </div>
 
   <!-- Sticky notes container -->
@@ -675,6 +707,7 @@ onAuthStateChanged(auth, async user => {
     subscribeToRequests(user.uid);
     await loadBlockedWords();
     showScreen('dash');
+    initPanelSide();
     if (userProfile?.username === ADMIN_USERNAME)
       document.getElementById('admin-btn').classList.remove('hidden');
     maybeAutoEmail();
@@ -828,19 +861,14 @@ function renderDash() {
   const list = document.getElementById('task-list');
   if (!sorted.length) { list.innerHTML=`<div class="empty-state"><div class="big">📋</div>No tasks yet — hit ＋ to add one.</div>`; return; }
 
-  // Update select button appearance
-  const selBtn = document.getElementById('select-mode-btn');
-  if (selBtn) selBtn.textContent = selectMode ? '✕ Cancel' : '☑ Select';
-
-  // Bulk action bar
+  // Bulk action bar — show whenever anything is selected
   const bar = document.getElementById('bulk-action-bar');
   if (bar) {
-    if (selectMode) {
+    if (selectedIds.size > 0) {
       bar.classList.remove('hidden');
-      document.getElementById('bulk-count').textContent = selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select tasks';
+      document.getElementById('bulk-count').textContent = `${selectedIds.size} selected`;
     } else {
       bar.classList.add('hidden');
-      selectedIds.clear();
     }
   }
 
@@ -851,16 +879,15 @@ function renderDash() {
     const [dl,dc] = diffDays<0?[`${Math.abs(diffDays)}d ago`,'var(--danger)']:diffDays===0?['today','#f0c040']:diffDays===1?['1d','#f0c040']:[`${diffDays}d`,'var(--muted)'];
     const shared = t.sharedFrom ? `<span class="shared-badge">shared</span>` : '';
     const checked = selectedIds.has(t.id);
-    const checkbox = selectMode ? `<input type="checkbox" ${checked?'checked':''} onchange="toggleSelectTask('${t.id}',this.checked)" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;margin-bottom:0;background:transparent;border:none;padding:0">` : '';
-    return `<div class="task-item ${selectMode&&checked?'selected-task':''}" onclick="${selectMode?`toggleSelectTask('${t.id}',!document.querySelector('#cb-${t.id}').checked)`:''}" style="${selectMode?'cursor:pointer':''}">
-      ${checkbox ? `<input type="checkbox" id="cb-${t.id}" ${checked?'checked':''} onchange="toggleSelectTask('${t.id}',this.checked)" onclick="event.stopPropagation()" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;margin-bottom:0;background:transparent;border:none;padding:0">` : ''}
+    return `<div class="task-item ${checked?'selected-task':''}" style="cursor:default">
+      <input type="checkbox" id="cb-${t.id}" ${checked?'checked':''} onchange="toggleSelectTask('${t.id}',this.checked)" onclick="event.stopPropagation()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;margin-bottom:0;background:transparent;border:none;padding:0;margin-right:2px">
       <div class="task-urgency ${urgClass}"></div>
       <div class="task-info"><div class="task-name">${esc(t.name)}${shared}</div><div class="task-date">${label}</div></div>
       <div style="text-align:right;flex-shrink:0;min-width:44px">
         <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:${dc}">${dl}</div>
         <div style="font-size:10px;color:var(--muted)">days left</div>
       </div>
-      ${!selectMode ? `<button class="btn btn-icon" style="font-size:13px" onclick="openEdit('${t.id}')">✎</button>` : ''}
+      <button class="btn btn-icon" style="font-size:13px" onclick="openEdit('${t.id}')">✎</button>
     </div>`;
   }).join('');
   autoSync();
@@ -936,20 +963,51 @@ window.calDayClick = function(dateKey) {
   alert('Tasks on '+date+':\n\n'+names);
 };
 
-// ── Select Mode ──
+// ── Select Mode (legacy stub, kept for calendar toggle compat) ──
 window.toggleSelectMode = function() {
   selectMode = !selectMode;
   selectedIds.clear();
   renderDash();
 };
+
+// ── Side Panel position ──
+let panelSide = 'right'; // 'left' or 'right'
+window.togglePanelSide = function() {
+  panelSide = panelSide === 'right' ? 'left' : 'right';
+  applyPanelSide();
+  if (currentUser) saveProfile({ panelSide });
+};
+function applyPanelSide() {
+  const panel = document.getElementById('side-panel');
+  if (!panel) return;
+  if (panelSide === 'left') {
+    panel.style.right = 'auto';
+    panel.style.left = '16px';
+  } else {
+    panel.style.left = 'auto';
+    panel.style.right = '16px';
+  }
+}
+function initPanelSide() {
+  panelSide = userProfile?.panelSide || 'right';
+  applyPanelSide();
+}
 window.toggleSelectTask = function(id, checked) {
   if (checked) selectedIds.add(id);
   else selectedIds.delete(id);
-  // update count and checkbox without full re-render
+  // show/hide bulk bar
+  const bar = document.getElementById('bulk-action-bar');
   const countEl = document.getElementById('bulk-count');
-  if (countEl) countEl.textContent = selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select tasks';
+  if (bar) {
+    if (selectedIds.size > 0) {
+      bar.classList.remove('hidden');
+      if (countEl) countEl.textContent = `${selectedIds.size} selected`;
+    } else {
+      bar.classList.add('hidden');
+    }
+  }
   // highlight row
-  const row = document.querySelector(`[onclick*="${id}"]`)?.closest('.task-item') || document.getElementById(`cb-${id}`)?.closest('.task-item');
+  const row = document.getElementById(`cb-${id}`)?.closest('.task-item');
   if (row) row.classList.toggle('selected-task', checked);
   // sync checkbox state
   const cb = document.getElementById(`cb-${id}`);
@@ -961,6 +1019,11 @@ window.selectAll = function() {
 };
 window.deselectAll = function() {
   selectedIds.clear();
+  renderDash();
+};
+window.cancelSelectMode = function() {
+  selectedIds.clear();
+  selectMode = false;
   renderDash();
 };
 window.bulkDelete = async function() {
@@ -1234,6 +1297,14 @@ function _renderStackInPlace(stackId) {
       const s = stickies.find(s=>s.id===sid);
       if (s) { s.x = currentX; s.y = currentY; }
     });
+    // persist the canonical position so Firestore snapshots never revert the stack
+    if (currentUser) {
+      const batch = writeBatch(db);
+      ids.forEach(sid => {
+        batch.update(doc(db,'users',currentUser.uid,'stickies',sid), {x:currentX, y:currentY});
+      });
+      batch.commit().catch(()=>{});
+    }
   }
   renderAllStickies();
 }
@@ -1257,12 +1328,34 @@ window.stackWithNearest = async function(id) {
 window.unstackSticky = async function(id) {
   const s = stickies.find(s=>s.id===id); if(!s||!s.stackId) return;
   const stackId = s.stackId;
-  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{stackId:null, stackOrder:0});
-  // if only 1 left in stack, unstack that too
+
+  // Capture the current screen position of the stack before we break it apart,
+  // then write it back so neither the removed note nor the remaining ones teleport.
+  const ids = stickyStacks[stackId] || [];
+  let stackX, stackY;
+  for (const sid of ids) {
+    const el = document.getElementById(`sticky-${sid}`);
+    if (el) { stackX = el.offsetLeft; stackY = el.offsetTop; break; }
+  }
+
+  const batch = writeBatch(db);
+  const unstackUpdate = {stackId:null, stackOrder:0};
+  if (stackX !== undefined) { unstackUpdate.x = stackX; unstackUpdate.y = stackY; }
+  batch.update(doc(db,'users',currentUser.uid,'stickies',id), unstackUpdate);
+
+  // if only 1 left in stack, unstack that too (with the same position)
   const remaining = stickies.filter(o=>o.stackId===stackId&&o.id!==id);
   if (remaining.length===1) {
-    await updateDoc(doc(db,'users',currentUser.uid,'stickies',remaining[0].id),{stackId:null,stackOrder:0});
+    const remainUpdate = {stackId:null, stackOrder:0};
+    if (stackX !== undefined) { remainUpdate.x = stackX; remainUpdate.y = stackY; }
+    batch.update(doc(db,'users',currentUser.uid,'stickies',remaining[0].id), remainUpdate);
+  } else if (remaining.length > 1 && stackX !== undefined) {
+    // keep remaining notes pinned to the same position
+    remaining.forEach(o => {
+      batch.update(doc(db,'users',currentUser.uid,'stickies',o.id), {x:stackX, y:stackY});
+    });
   }
+  await batch.commit();
 };
 
 // Toggle theme on individual note
@@ -1824,23 +1917,38 @@ async function mergeStickies(dragId, targetId) {
     baseOrder = 1;
   }
 
-  // use the visible dragged note's current DOM size as the standard for the whole stack
+  // use the visible dragged note's current DOM size and position as the standard for the whole stack
   const dragEl = document.getElementById(`sticky-${dragId}`);
   const w = dragEl ? dragEl.offsetWidth  : (dragged.w || 230);
   const h = dragEl ? dragEl.offsetHeight : (dragged.h || 170);
 
+  // Use the target note's current screen position as the canonical stack position
+  // (fall back to its stored x/y). This becomes the position every note in the
+  // stack will render at, so switching notes never teleports the stack.
+  const targetEl = document.getElementById(`sticky-${targetId}`);
+  const stackX = targetEl ? targetEl.offsetLeft : (target.x || 0);
+  const stackY = targetEl ? targetEl.offsetTop  : (target.y || 0);
+
+  // Immediately update the in-memory stickies so _renderStackInPlace won't
+  // revert to the old stored coordinates before the snapshot comes back.
+  stickies.forEach(s => {
+    if (s.id === targetId || dragGroup.some(d => d.id === s.id)) {
+      s.x = stackX; s.y = stackY;
+    }
+  });
+
   // batch all writes so onSnapshot fires exactly once
   const batch = writeBatch(db);
   if (!target.stackId) {
-    batch.update(doc(db,'users',currentUser.uid,'stickies',targetId), {stackId:destStackId, stackOrder:0, w, h});
+    batch.update(doc(db,'users',currentUser.uid,'stickies',targetId), {stackId:destStackId, stackOrder:0, w, h, x:stackX, y:stackY});
   } else {
-    // resize existing stack members to match
+    // update position and resize for existing stack members
     stickies.filter(s=>s.stackId===destStackId).forEach(s => {
-      batch.update(doc(db,'users',currentUser.uid,'stickies',s.id), {w, h});
+      batch.update(doc(db,'users',currentUser.uid,'stickies',s.id), {w, h, x:stackX, y:stackY});
     });
   }
   dragGroup.forEach((s, i) => {
-    batch.update(doc(db,'users',currentUser.uid,'stickies',s.id), {stackId:destStackId, stackOrder:baseOrder+i, w, h});
+    batch.update(doc(db,'users',currentUser.uid,'stickies',s.id), {stackId:destStackId, stackOrder:baseOrder+i, w, h, x:stackX, y:stackY});
   });
   await batch.commit();
 }
