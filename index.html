@@ -688,8 +688,6 @@ let selectedIds  = new Set(); // tracks which friend UIDs have unread messages
 
 // ── Auth state ──
 let _didLogOut = false;
-let _pendingPassword = null; // held only for the duration of login → onAuthStateChanged // true when user explicitly signed out this session
-
 onAuthStateChanged(auth, async user => {
   if (user && !_didLogOut) {
     currentUser = user;
@@ -704,8 +702,6 @@ onAuthStateChanged(auth, async user => {
         await setDoc(doc(db, 'usernames', key), { uid: user.uid, username: userProfile.username });
       }
     }
-    await initCrypto(user.uid, _pendingPassword);
-    _pendingPassword = null; // clear immediately — never keep it around
     subscribeToTasks(user.uid);
     subscribeToStickies(user.uid);
     subscribeToFriends(user.uid);
@@ -863,11 +859,10 @@ window.doLogin = async function() {
   _didLogOut = false;
   try {
     // Capture password NOW before Firebase consumes it — needed for key unwrapping
-    _pendingPassword = pass;
-    await signInWithEmailAndPassword(auth, email, pass);
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    await initCrypto(cred.user.uid, pass);
   }
   catch(e) {
-    _pendingPassword = null;
     setNotice('login-notice', friendlyError(e), 'error');
     btn.disabled=false; btn.textContent='Sign in →';
   }
@@ -884,11 +879,11 @@ window.doSignup = async function() {
   if (pass !== confirm) { setNotice('signup-notice','Passwords do not match.','error'); return; }
   btn.disabled=true; btn.textContent='Creating…';
   try {
-    _pendingPassword = pass;
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
     await setDoc(doc(db,'users',cred.user.uid), { username, email, emailSettings:{}, schedSettings:{}, theme:{} });
     // index username for friend search
     await setDoc(doc(db,'usernames',username.toLowerCase()), { uid: cred.user.uid, username });
+    await initCrypto(cred.user.uid, pass);
   } catch(e) { setNotice('signup-notice', friendlyError(e), 'error'); btn.disabled=false; btn.textContent='Create account →'; }
 };
 window.doLogout = async function() {
@@ -1827,6 +1822,7 @@ async function e2eDecrypt(friendUid, msg) {
   } catch(e) { return '🔒 could not decrypt'; }
 }
 
+}
 
 window.sendChatMsg = async function() {
   const input = document.getElementById('chat-input');
