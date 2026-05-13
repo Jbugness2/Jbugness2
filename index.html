@@ -705,7 +705,7 @@ onAuthStateChanged(auth, async user => {
     subscribeToStickies(user.uid);
     subscribeToFriends(user.uid);
     subscribeToRequests(user.uid);
-    await loadBlockedWords();
+    loadBlockedWords(); // fire-and-forget, non-admin gets denied fast
     showScreen('dash');
     initPanelSide();
     if (userProfile?.username === ADMIN_USERNAME)
@@ -721,15 +721,13 @@ onAuthStateChanged(auth, async user => {
     chatNotifUnsubs.forEach(u => u()); chatNotifUnsubs = [];
     tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = chatUnsub = null;
 
-    // Close every floating window / overlay
-    ['friends-window','chat-window','side-panel'].forEach(id => {
+    // Close every floating window
+    ['friends-window','chat-window'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
     });
-    [
-      'edit-overlay','share-overlay','logout-overlay',
-      'settings-overlay','customize-overlay'
-    ].forEach(id => {
+    // Close all overlays
+    ['edit-overlay','share-overlay','logout-overlay','settings-overlay','customize-overlay'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
     });
@@ -737,6 +735,9 @@ onAuthStateChanged(auth, async user => {
     // Clear sticky notes from the canvas
     const sc = document.getElementById('sticky-container');
     if (sc) sc.innerHTML = '';
+
+    // Reset background image so it doesn't bleed onto the login screen
+    document.body.style.backgroundImage = 'none';
 
     // Reset admin button for next login
     const adminBtn = document.getElementById('admin-btn');
@@ -1008,6 +1009,7 @@ window.togglePanelSide = function() {
 function applyPanelSide() {
   const panel = document.getElementById('side-panel');
   if (!panel) return;
+  panel.classList.remove('hidden');
   if (panelSide === 'left') {
     panel.style.right = 'auto';
     panel.style.left = '16px';
@@ -1582,8 +1584,13 @@ const BUILTIN_BLOCKED = [
 let customBlockedWords = []; // loaded from Firebase (admin only)
 
 async function loadBlockedWords() {
-  const snap = await getDoc(doc(db, 'admin', 'blockedWords'));
-  if (snap.exists()) customBlockedWords = snap.data().words || [];
+  try {
+    const snap = await Promise.race([
+      getDoc(doc(db, 'admin', 'blockedWords')),
+      new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), 3000))
+    ]);
+    if (snap.exists()) customBlockedWords = snap.data().words || [];
+  } catch(_) { /* non-admin users will be denied — that's fine */ }
 }
 
 function isMessageBlocked(text) {
