@@ -512,11 +512,11 @@ select { cursor:pointer; }
         <div class="section-box" style="grid-column:1/-1">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div>
-              <div class="section-title" style="margin-bottom:2px">Sticky Notes Follow Theme</div>
-              <div style="font-size:11px;color:var(--muted)">Makes all stickies use the app's dark theme instead of colors</div>
+              <div class="section-title" style="margin-bottom:2px">Show Patch Notes</div>
+              <div style="font-size:11px;color:var(--muted)">Display patch note stickies when new updates are published</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" id="sticky-theme-toggle" onchange="toggleGlobalStickyTheme(this.checked)">
+              <input type="checkbox" id="patch-notes-toggle" onchange="togglePatchNotesEnabled(this.checked)">
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -559,6 +559,19 @@ select { cursor:pointer; }
             <button class="btn btn-ghost btn-sm" onclick="setFont('system-ui')" style="font-family:system-ui">System UI</button>
           </div>
 
+        </div>
+        <!-- Sticky Notes Theme -->
+        <div class="section-box" style="grid-column:1/-1">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div class="section-title" style="margin-bottom:2px">Sticky Notes Follow Theme</div>
+              <div style="font-size:11px;color:var(--muted)">Makes all stickies use the app's dark theme instead of colors</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="sticky-theme-toggle" onchange="toggleGlobalStickyTheme(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
         <!-- Opacity -->
         <div class="section-box" style="grid-column:1/-1">
@@ -921,6 +934,10 @@ function subscribeToPatchNote() {
     if (existing) existing.remove();
 
     if (!snap.exists() || !snap.data().active) return;
+
+    // Respect user's patch notes preference (default on)
+    if (userProfile?.showPatchNotes === false) return;
+
     const data = snap.data();
     const content = data.content || '';
     const publishedAt = data.createdAt?.toMillis?.() || 0;
@@ -2431,6 +2448,17 @@ window.toggleGlobalStickyTheme = async function(val) {
   renderAllStickies();
 };
 
+window.togglePatchNotesEnabled = async function(val) {
+  await saveProfile({ showPatchNotes: val });
+  if (!val) {
+    const el = document.getElementById('sticky-patch-note');
+    if (el) el.remove();
+  } else {
+    // Re-trigger patch note check
+    subscribeToPatchNote();
+  }
+};
+
 window.openCustomize = function() {
   const as = document.getElementById('accent-swatches');
   as.innerHTML = ACCENT_PRESETS.map(c=>`<div class="swatch" style="background:${c}" onclick="previewAccent('${c}')"></div>`).join('');
@@ -2438,6 +2466,8 @@ window.openCustomize = function() {
   bs.innerHTML = BG_PRESETS.map(c=>`<div class="swatch" style="background:${c};border:2px solid #444" onclick="previewBg('${c}')"></div>`).join('');
   const op = userProfile?.theme?.opacity || {};
   loadOpacitySliders({ task:100, sticky:100, modal:100, friends:100, chat:100, nav:100, ...op });
+  const stt = document.getElementById('sticky-theme-toggle');
+  if (stt) stt.checked = !!userProfile?.stickyThemed;
   document.getElementById('customize-overlay').classList.remove('hidden');
 };
 window.closeCustomize = function() { document.getElementById('customize-overlay').classList.add('hidden'); };
@@ -2505,7 +2535,7 @@ window.openSettings = function() {
   document.getElementById('set-email').value = es.address||'';
   document.getElementById('email-frequency').value = es.frequency||'daily';
   document.getElementById('email-section').classList.toggle('hidden',!es.enabled);
-  document.getElementById('sticky-theme-toggle').checked = !!userProfile?.stickyThemed;
+  document.getElementById('patch-notes-toggle').checked = userProfile?.showPatchNotes !== false;
   clearNotice('settings-notice');
   document.getElementById('settings-overlay').classList.remove('hidden');
 };
