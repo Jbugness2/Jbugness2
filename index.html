@@ -1700,38 +1700,53 @@ async function _unwrapPrivateKey(blob, wrappingKey) {
 }
 
 // ── Called once after login ──
-// password = the plaintext password the user just typed
 async function initCrypto(uid, password) {
   Object.keys(_keyCache).forEach(k => delete _keyCache[k]);
   _myPrivateKey   = null;
   _myPublicKeyJwk = null;
 
-  // 1. Check localStorage for already-unwrapped key (same device/session)
-  const lsRaw = localStorage.getItem(`e2e_priv_${uid}`);
-  if (lsRaw && !password) {
-    // No password supplied (e.g. auto-login after page refresh) —
-    // we can't re-derive the wrapping key, so skip; key will load
-    // on next explicit login.
-    return;
-  }
-
   try {
-    // 2. Load the encrypted blob from Firestore
-    const snap = await getDoc(doc(db,'users',uid));
-    const blob = snap.data()?.encryptedKey;   // { iv, wrapped, salt, pubKey }
+    const snap     = await getDoc(doc(db, 'users', uid));
+    const userData = snap.data() || {};
+    const blob     = userData.encryptedKey;   // { iv, wrapped, salt, pubKey }
 
-    if (blob && password) {
-      // ── Existing user on a new device (or forced re-derive) ──
-      const salt       = blob.salt;
-      const wrappingKey = await _deriveWrappingKey(password, salt);
-      _myPrivateKey    = await _unwrapPrivateKey(blob, wrappingKey);
-      _myPublicKeyJwk  = blob.pubKey;
-      // Cache unwrapped JWK in localStorage so page-refresh works
-      const privJwk = await crypto.subtle.exportKey('jwk', _myPrivateKey).catch(()=>null);
-      if (privJwk) localStorage.setItem(`e2e_priv_${uid}`, JSON.stringify(privJwk));
+    // ── Path A: existing encrypted blob + password → unwrap ──
+    if (blob?.wrapped && password) {
+      try {
+        const wrappingKey = await _deriveWrappingKey(password, blob.salt);
+        _myPrivateKey     = await _unwrapPrivateKey(blob, wrappingKey);
+        _myPublicKeyJwk   = blob.pubKey;
+        console.log('[crypto] unwrapped key from Firestore blob');
+      } catch(e) {
+        console.warn('[crypto] unwrap failed, regenerating:', e);
+        _myPrivateKey = null;
+      }
+    }
 
-    } else if (!blob && password) {
-      // ── Brand-new user — generate keypair and wrap it ──
+    // ── Path B: localStorage cached JWK (same device, no password needed) ──
+    if (!_myPrivateKey) {
+      const lsRaw = localStorage.getItem(`e2e_priv_${uid}`);
+      if (lsRaw) {
+        try {
+          const privJwk = JSON.parse(lsRaw);
+          _myPrivateKey   = await crypto.subtle.importKey(
+            'jwk', privJwk, { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
+          _myPublicKeyJwk = userData.pubKey || blob?.pubKey || null;
+          console.log('[crypto] loaded key from localStorage');
+        } catch(e) {
+          localStorage.removeItem(`e2e_priv_${uid}`);
+          _myPrivateKey = null;
+        }
+      }
+    }
+
+    // ── Path C: no key anywhere → generate fresh keypair ──
+    if (!_myPrivateKey) {
+      if (!password) {
+        console.warn('[crypto] no key and no password — cannot init');
+        return;
+      }
+      console.log('[crypto] generating fresh keypair');
       const kp = await crypto.subtle.generateKey(
         { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
       _myPrivateKey   = kp.privateKey;
@@ -1741,27 +1756,26 @@ async function initCrypto(uid, password) {
       const wrappingKey = await _deriveWrappingKey(password, salt);
       const { iv, wrapped } = await _wrapPrivateKey(_myPrivateKey, wrappingKey);
 
-      // Store encrypted blob + public key in Firestore
       await setDoc(doc(db,'users',uid), {
-        encryptedKey: { iv, wrapped, salt: _b64(salt.buffer), pubKey: _myPublicKeyJwk }
+        encryptedKey: { iv, wrapped, salt: _b64(salt.buffer), pubKey: _myPublicKeyJwk },
+        pubKey: _myPublicKeyJwk
       }, { merge: true });
+      console.log('[crypto] new keypair saved to Firestore');
+    }
 
-      // Cache in localStorage
+    // ── Always: cache private key in localStorage + ensure pubKey is top-level ──
+    if (_myPrivateKey) {
       const privJwk = await crypto.subtle.exportKey('jwk', _myPrivateKey).catch(()=>null);
       if (privJwk) localStorage.setItem(`e2e_priv_${uid}`, JSON.stringify(privJwk));
 
-    } else if (!blob && !password) {
-      // No blob, no password — nothing we can do yet
-      return;
-    }
-
-    // 3. Always write public key to top-level profile for fast lookup
-    if (_myPublicKeyJwk) {
-      await setDoc(doc(db,'users',uid), { pubKey: _myPublicKeyJwk }, { merge:true });
+      if (_myPublicKeyJwk) {
+        await setDoc(doc(db,'users',uid), { pubKey: _myPublicKeyJwk }, { merge: true });
+        console.log('[crypto] pubKey written to Firestore, initCrypto complete');
+      }
     }
 
   } catch(e) {
-    console.warn('initCrypto error:', e);
+    console.error('[crypto] initCrypto error:', e);
   }
 }
 
@@ -1784,11 +1798,11 @@ async function reWrapKeyAfterPasswordChange(uid, newPassword) {
 // ── Derive (or return cached) shared AES key with a friend ──
 async function getSharedKey(friendUid) {
   if (_keyCache[friendUid]) return _keyCache[friendUid];
-  if (!_myPrivateKey) return null;
+  if (!_myPrivateKey) { console.warn('[crypto] getSharedKey: _myPrivateKey is null'); return null; }
   try {
     const snap   = await getDoc(doc(db,'users',friendUid));
     const pubJwk = snap.data()?.pubKey;
-    if (!pubJwk) return null;
+    if (!pubJwk) { console.warn('[crypto] getSharedKey: no pubKey found for', friendUid); return null; }
     const theirPub = await crypto.subtle.importKey('jwk', pubJwk,
       { name:'ECDH', namedCurve:'P-256' }, false, []);
     const shared = await crypto.subtle.deriveKey(
@@ -1802,7 +1816,10 @@ async function getSharedKey(friendUid) {
 // ── Encrypt plaintext → { iv, ct } ──
 async function e2eEncrypt(friendUid, plaintext) {
   const key = await getSharedKey(friendUid);
-  if (!key) return { text: plaintext }; // fallback: plain if no key yet
+  if (!key) {
+    console.warn('[crypto] e2eEncrypt: no shared key for', friendUid, '— storing plain text');
+    return { text: plaintext };
+  }
   const iv  = crypto.getRandomValues(new Uint8Array(12));
   const enc = await crypto.subtle.encrypt(
     { name:'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
@@ -1820,6 +1837,8 @@ async function e2eDecrypt(friendUid, msg) {
       key, _ub64(msg.ct));
     return new TextDecoder().decode(dec);
   } catch(e) { return '🔒 could not decrypt'; }
+}
+
 }
 
 window.sendChatMsg = async function() {
