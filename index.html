@@ -18,7 +18,7 @@
 #screen-dash { background: rgba(23,23,28,var(--op-task)) !important; }
 .modal { background: rgba(23,23,28,var(--op-modal)) !important; }
 #friends-window { background: rgba(23,23,28,var(--op-friends)) !important; }
-#chat-window { background: rgba(23,23,28,var(--op-chat)) !important; }
+.draggable-window { background: rgba(23,23,28,var(--op-chat)) !important; }
 .dash-header { background: rgba(23,23,28,var(--op-nav)) !important; border-radius: 12px; }
 html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 14px; }
 body { background-image: var(--bg-image); background-size: cover; background-position: center; background-attachment: fixed; }
@@ -641,30 +641,8 @@ select { cursor:pointer; }
     <div class="window-resize" id="friends-resize"></div>
   </div>
 
-  <!-- Chat Window (draggable) -->
-  <div id="chat-window" class="draggable-window hidden" style="width:300px;height:400px;bottom:80px;right:30px;top:auto">
-    <div class="window-header" id="chat-header" style="flex-wrap:wrap;gap:6px;padding:10px 12px">
-      <span class="window-title" id="chat-title" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">💬 Chat</span>
-      <div class="window-controls" style="display:flex;gap:4px;flex-shrink:0">
-        <button class="win-btn" id="chat-invite-btn" onclick="toggleInvitePanel()" title="Invite to group" style="padding:3px 9px;font-size:14px;font-weight:700;display:none">＋</button>
-        <button class="win-btn" onclick="clearChat()" title="Clear chat history" style="padding:3px 7px;font-size:12px">🗑</button>
-        <button class="win-btn" onclick="closeChatWindow()" style="padding:3px 7px;font-size:12px">✕</button>
-      </div>
-    </div>
-    <!-- Invite panel (slides in below header) -->
-    <div id="chat-invite-panel" style="display:none;background:var(--surface2);border-bottom:1px solid var(--border);padding:10px 12px;flex-shrink:0">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Invite to chat</div>
-      <div id="invite-friends-list" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto"></div>
-      <div id="invite-notice" style="margin-top:6px;font-size:11px"></div>
-    </div>
-    <div class="chat-messages" id="chat-messages"></div>
-    <div id="chat-notice" style="padding:0 12px;font-size:11px"></div>
-    <div class="chat-input-row">
-      <input type="text" class="chat-input" id="chat-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendChatMsg()">
-      <button class="btn-accent-sm" onclick="sendChatMsg()">Send</button>
-    </div>
-    <div class="window-resize" id="chat-resize"></div>
-  </div>
+  <!-- Chat Windows (dynamically created, multiple) -->
+  <div id="chat-windows-container"></div>
 
 </div>
 
@@ -703,15 +681,11 @@ let stickies      = [];
 let friends       = [];
 let friendRequests = [];
 let groups        = [];
-let activeGroupId = null;
 let groupUnsub    = null;
 let groupChatUnsubs = {};
 let unreadGroups  = new Set();
 let editingTaskId = null;
 let sharingTaskId = null;
-let activeChatFriendId = null;
-let activeChatIsGroup  = false;
-let chatUnsub    = null;
 let tasksUnsub   = null;
 let stickiesUnsub = null;
 let friendsUnsub = null;
@@ -719,7 +693,7 @@ let reqUnsub     = null;
 let syncTimeout  = null;
 let unreadChats  = new Set();
 let selectMode   = false;
-let selectedIds  = new Set(); // tracks which friend UIDs have unread messages
+let selectedIds  = new Set();
 
 // ── Auth state ──
 let _didLogOut = false;
@@ -751,16 +725,22 @@ onAuthStateChanged(auth, async user => {
   } else if (!user || _didLogOut) {
     currentUser = null; userProfile = null; tasks = []; stickies = [];
     friends = []; friendRequests = []; groups = []; selectedIds.clear(); selectMode = false;
-    unreadChats.clear(); unreadGroups.clear(); activeChatFriendId = null; activeGroupId = null; activeChatIsGroup = false;
+    unreadChats.clear(); unreadGroups.clear();
+
+    // Close all open chat windows
+    Object.keys(_chatWindows).forEach(k => closeChatWindow(k));
 
     // Unsubscribe all listeners
-    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, chatUnsub, groupUnsub].forEach(u => u && u());
+    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, groupUnsub].forEach(u => u && u());
     chatNotifUnsubs.forEach(u => u()); chatNotifUnsubs = [];
     Object.values(groupChatUnsubs).forEach(u => u && u()); groupChatUnsubs = {};
-    tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = chatUnsub = groupUnsub = null;
+    tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = groupUnsub = null;
 
     // Close every floating window and the side panel
-    ['friends-window','chat-window','side-panel'].forEach(id => {
+    // Close all open chat windows
+    Object.keys(_chatWindows).forEach(k => closeChatWindow(k));
+    // Hide friends window and side panel
+    ['friends-window','side-panel'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
     });
@@ -1004,78 +984,6 @@ async function groupDecrypt(groupId, msg) {
   } catch(_) { return '🔒 could not decrypt'; }
 }
 
-window.openGroupChat = function(groupId, groupName) {
-  activeGroupId = groupId;
-  activeChatIsGroup = true;
-  activeChatFriendId = null;
-  unreadGroups.delete(groupId);
-  updateFriendBadge();
-  renderGroupsList();
-  document.getElementById('chat-title').textContent = `👥 ${groupName}`;
-  document.getElementById('chat-window').classList.remove('hidden');
-  document.getElementById('chat-invite-btn').style.display = '';
-  _closeInvitePanel();
-  if (chatUnsub) { chatUnsub(); chatUnsub = null; }
-  chatUnsub = onSnapshot(
-    query(collection(db,'groupChats',groupId,'messages'), orderBy('ts')),
-    snap => {
-      const msgs = snap.docs.map(d=>({id:d.id,...d.data()}));
-      const container = document.getElementById('chat-messages');
-      const gid = activeGroupId;
-      const g = groups.find(g=>g.id===gid);
-      Promise.all(msgs.map(async m => {
-        const plaintext = await groupDecrypt(gid, m);
-        const mine = m.from === currentUser.uid;
-        const senderName = g?.memberNames?.[m.from] || m.from;
-        const time = m.ts?.toDate ? m.ts.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
-        // Task share message — render with add button
-        const tsMatch = plaintext.match(/\[taskshare:(.*?)\]$/s);
-        if (tsMatch) {
-          let taskData = null;
-          try { taskData = JSON.parse(tsMatch[1]); } catch(_) {}
-          const displayText = plaintext.replace(/\[taskshare:.*?\]$/s,'').trim();
-          const addBtn = !mine && taskData
-            ? `<button onclick='addSharedGroupTask(${JSON.stringify(taskData)})' style="margin-top:6px;background:var(--accent);color:#0e0e11;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font-ui)">+ Add to my tasks</button>`
-            : '';
-          return `<div class="chat-msg ${mine?'mine':'theirs'}">
-            ${!mine ? `<div style="font-size:10px;opacity:.6;margin-bottom:2px">${esc(senderName)}</div>` : ''}
-            ${esc(displayText)}
-            ${addBtn}
-            <div class="chat-msg-time">${time}</div>
-          </div>`;
-        }
-        return `<div class="chat-msg ${mine?'mine':'theirs'}">
-          ${!mine ? `<div style="font-size:10px;opacity:.6;margin-bottom:2px">${esc(senderName)}</div>` : ''}
-          ${esc(plaintext)}
-          <div class="chat-msg-time">${time}</div>
-        </div>`;
-      })).then(html => {
-        container.innerHTML = html.join('');
-        container.scrollTop = container.scrollHeight;
-      });
-    }
-  );
-};
-
-window.sendChatMsg = async function() {
-  const input = document.getElementById('chat-input');
-  const text  = input.value.trim();
-  if (!text) return;
-  if (isMessageBlocked(text)) { input.value = ''; return; }
-  if (activeChatIsGroup && activeGroupId) {
-    const payload = await groupEncrypt(activeGroupId, text);
-    await addDoc(collection(db,'groupChats',activeGroupId,'messages'),{
-      from: currentUser.uid, senderName: userProfile.username, ...payload, ts: serverTimestamp()
-    });
-  } else if (activeChatFriendId) {
-    const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
-    const payload = await e2eEncrypt(activeChatFriendId, text);
-    await addDoc(collection(db,'chats',chatId,'messages'),{
-      from: currentUser.uid, ...payload, ts: serverTimestamp()
-    });
-  }
-  input.value = '';
-};
 
 // ── Screens ──
 function showScreen(name) {
@@ -1827,35 +1735,133 @@ window.declineFriendReq = async function(reqId) {
 };
 
 // ── Chat ──
+// ══════════════════════════════════════
+//  Multi-window chat system
+// ══════════════════════════════════════
+// Map of chatKey → { el, unsub, isGroup, friendUid, groupId }
+const _chatWindows = {};
+
+function _chatKey(isGroup, id) { return isGroup ? `g:${id}` : `d:${id}`; }
+
+function _nextWindowPos() {
+  const count = Object.keys(_chatWindows).length;
+  return { right: 30 + count * 320, bottom: 80 };
+}
+
+function _buildChatWindow(key, title, isGroup, friendUid, groupId) {
+  if (_chatWindows[key]) {
+    // Already open — focus it
+    _chatWindows[key].el.style.zIndex = _topZ();
+    return _chatWindows[key].el;
+  }
+  const pos = _nextWindowPos();
+  const el = document.createElement('div');
+  el.className = 'draggable-window';
+  el.id = `cw-${key.replace(':','-')}`;
+  el.style.cssText = `width:300px;height:400px;bottom:${pos.bottom}px;right:${pos.right}px;top:auto;z-index:${_topZ()}`;
+  el.innerHTML = `
+    <div class="window-header" id="ch-${key}" style="flex-wrap:wrap;gap:6px;padding:10px 12px;cursor:move">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;color:var(--text)">${esc(title)}</span>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="win-btn" onclick="toggleInvitePanel('${key}')" title="Invite to group" style="padding:3px 9px;font-size:14px;font-weight:700">＋</button>
+        ${!isGroup ? `<button class="win-btn" onclick="clearChat('${key}')" title="Clear chat history" style="padding:3px 7px;font-size:12px">🗑</button>` : ''}
+        <button class="win-btn" onclick="closeChatWindow('${key}')" style="padding:3px 7px;font-size:12px">✕</button>
+      </div>
+    </div>
+    <div id="cw-invite-${key}" style="display:none;background:var(--surface2);border-bottom:1px solid var(--border);padding:10px 12px;flex-shrink:0">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Invite to chat</div>
+      <div id="cw-ilist-${key}" style="display:flex;flex-direction:column;gap:6px;max-height:130px;overflow-y:auto"></div>
+      <div id="cw-inotice-${key}" style="margin-top:6px;font-size:11px"></div>
+    </div>
+    <div class="chat-messages" id="cw-msgs-${key}"></div>
+    <div id="cw-notice-${key}" style="padding:0 12px;font-size:11px"></div>
+    <div class="chat-input-row">
+      <input type="text" class="chat-input" id="cw-input-${key}" placeholder="Type a message…"
+        onkeydown="if(event.key==='Enter')sendChatMsg('${key}')">
+      <button class="btn-accent-sm" onclick="sendChatMsg('${key}')">Send</button>
+    </div>
+    <div class="window-resize" id="cwr-${key}"></div>`;
+
+  document.getElementById('chat-windows-container').appendChild(el);
+
+  // Bring to front on click
+  el.addEventListener('mousedown', () => { el.style.zIndex = _topZ(); });
+
+  // Wire draggable + resizable using existing helpers
+  makeDraggable(el, el.querySelector('.window-header'), key, 'chat');
+  makeResizable(el, el.querySelector(`#cwr-${key}`), key, 'chat');
+
+  _chatWindows[key] = { el, unsub: null, isGroup, friendUid, groupId };
+  return el;
+}
+
+let _zCounter = 200;
+function _topZ() { return ++_zCounter; }
+
 window.openChat = function(friendUid, friendName) {
-  activeChatFriendId = friendUid;
-  activeChatIsGroup = false;
-  activeGroupId = null;
-  document.getElementById('chat-title').textContent = `💬 ${friendName}`;
-  document.getElementById('chat-window').classList.remove('hidden');
-  document.getElementById('chat-invite-btn').style.display = '';
-  _closeInvitePanel();
+  const key = _chatKey(false, friendUid);
+  _buildChatWindow(key, `💬 ${friendName}`, false, friendUid, null);
   unreadChats.delete(friendUid);
   renderFriendsList();
-  // Build chat ID (sorted so both users get same ID)
   const chatId = [currentUser.uid, friendUid].sort().join('_');
   maybeAutoCleanChat(chatId);
-  if (chatUnsub) chatUnsub();
-  chatUnsub = onSnapshot(
+  if (_chatWindows[key].unsub) return; // already subscribed
+  _chatWindows[key].unsub = onSnapshot(
     query(collection(db,'chats',chatId,'messages'), orderBy('ts')),
     snap => {
       const msgs = snap.docs.map(d=>({id:d.id,...d.data()}));
-      const container = document.getElementById('chat-messages');
-      // Decrypt all messages in parallel then render
-      const fid = activeChatFriendId;
+      const container = document.getElementById(`cw-msgs-${key}`);
+      if (!container) return;
       Promise.all(msgs.map(async m => {
-        const otherUid = m.from === currentUser.uid ? fid : m.from;
+        const otherUid = m.from === currentUser.uid ? friendUid : m.from;
         const plaintext = await e2eDecrypt(otherUid, m);
         const mine = m.from === currentUser.uid;
         const time = m.ts?.toDate ? m.ts.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+        return `<div class="chat-msg ${mine?'mine':'theirs'}">${esc(plaintext)}<div class="chat-msg-time">${time}</div></div>`;
+      })).then(html => {
+        container.innerHTML = html.join('');
+        container.scrollTop = container.scrollHeight;
+      });
+    }
+  );
+};
+
+window.openGroupChat = function(groupId, groupName) {
+  const key = _chatKey(true, groupId);
+  _buildChatWindow(key, `👥 ${groupName}`, true, null, groupId);
+  unreadGroups.delete(groupId);
+  updateFriendBadge();
+  renderGroupsList();
+  if (_chatWindows[key].unsub) return;
+  const g = groups.find(g=>g.id===groupId);
+  _chatWindows[key].unsub = onSnapshot(
+    query(collection(db,'groupChats',groupId,'messages'), orderBy('ts')),
+    snap => {
+      const msgs = snap.docs.map(d=>({id:d.id,...d.data()}));
+      const container = document.getElementById(`cw-msgs-${key}`);
+      if (!container) return;
+      Promise.all(msgs.map(async m => {
+        const plaintext = await groupDecrypt(groupId, m);
+        const mine = m.from === currentUser.uid;
+        const senderName = g?.memberNames?.[m.from] || m.from;
+        const time = m.ts?.toDate ? m.ts.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+        const tsMatch = plaintext.match(/\[taskshare:(.*?)\]$/s);
+        if (tsMatch) {
+          let taskData = null;
+          try { taskData = JSON.parse(tsMatch[1]); } catch(_) {}
+          const displayText = plaintext.replace(/\[taskshare:.*?\]$/s,'').trim();
+          const addBtn = !mine && taskData
+            ? `<button onclick='addSharedGroupTask(${JSON.stringify(taskData)})' style="margin-top:6px;background:var(--accent);color:#0e0e11;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font-ui)">+ Add to my tasks</button>`
+            : '';
+          return `<div class="chat-msg ${mine?'mine':'theirs'}">
+            ${!mine?`<div style="font-size:10px;opacity:.6;margin-bottom:2px">${esc(senderName)}</div>`:''}
+            ${esc(displayText)}${addBtn}
+            <div class="chat-msg-time">${time}</div>
+          </div>`;
+        }
         return `<div class="chat-msg ${mine?'mine':'theirs'}">
-          ${esc(plaintext)}
-          <div class="chat-msg-time">${time}</div>
+          ${!mine?`<div style="font-size:10px;opacity:.6;margin-bottom:2px">${esc(senderName)}</div>`:''}
+          ${esc(plaintext)}<div class="chat-msg-time">${time}</div>
         </div>`;
       })).then(html => {
         container.innerHTML = html.join('');
@@ -1864,27 +1870,136 @@ window.openChat = function(friendUid, friendName) {
     }
   );
 };
-window.clearChat = async function() {
-  if (!activeChatFriendId) return;
-  if (!confirm('Clear all messages in this chat? This cannot be undone.')) return;
-  const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
-  const snap = await getDocs(collection(db,'chats',chatId,'messages'));
-  const deletes = snap.docs.map(d => deleteDoc(doc(db,'chats',chatId,'messages',d.id)));
-  await Promise.all(deletes);
-  // record clear time
-  await setDoc(doc(db,'chats',chatId,'meta','clearLog'),{ lastCleared: serverTimestamp() }, { merge: true });
+
+window.closeChatWindow = function(key) {
+  const w = _chatWindows[key];
+  if (!w) return;
+  if (w.unsub) w.unsub();
+  w.el.remove();
+  delete _chatWindows[key];
 };
 
+window.clearChat = async function(key) {
+  const w = _chatWindows[key];
+  if (!w || w.isGroup) return;
+  if (!confirm('Clear all messages in this chat? This cannot be undone.')) return;
+  const chatId = [currentUser.uid, w.friendUid].sort().join('_');
+  const snap = await getDocs(collection(db,'chats',chatId,'messages'));
+  await Promise.all(snap.docs.map(d => deleteDoc(doc(db,'chats',chatId,'messages',d.id))));
+  await setDoc(doc(db,'chats',chatId,'meta','clearLog'),{ lastCleared: serverTimestamp() },{ merge: true });
+};
+
+window.sendChatMsg = async function(key) {
+  const input = document.getElementById(`cw-input-${key}`);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  if (isMessageBlocked(text)) { input.value = ''; return; }
+  const w = _chatWindows[key];
+  if (!w) return;
+  if (w.isGroup) {
+    const payload = await groupEncrypt(w.groupId, text);
+    await addDoc(collection(db,'groupChats',w.groupId,'messages'),{
+      from: currentUser.uid, senderName: userProfile.username, ...payload, ts: serverTimestamp()
+    });
+  } else {
+    const chatId = [currentUser.uid, w.friendUid].sort().join('_');
+    const payload = await e2eEncrypt(w.friendUid, text);
+    await addDoc(collection(db,'chats',chatId,'messages'),{
+      from: currentUser.uid, ...payload, ts: serverTimestamp()
+    });
+  }
+  input.value = '';
+};
+
+// ── Invite Panel (per-window) ──
+window.toggleInvitePanel = function(key) {
+  const panel = document.getElementById(`cw-invite-${key}`);
+  if (!panel) return;
+  if (panel.style.display === 'none' || !panel.style.display) {
+    _renderInvitePanel(key);
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+  }
+};
+
+function _renderInvitePanel(key) {
+  const el = document.getElementById(`cw-ilist-${key}`);
+  const notice = document.getElementById(`cw-inotice-${key}`);
+  if (!el || !notice) return;
+  notice.innerHTML = '';
+  const w = _chatWindows[key];
+  if (!w) return;
+  let alreadyIn = new Set([currentUser.uid]);
+  if (w.isGroup) {
+    const g = groups.find(g=>g.id===w.groupId);
+    if (g) g.members.forEach(m => alreadyIn.add(m));
+  } else {
+    alreadyIn.add(w.friendUid);
+  }
+  const invitable = friends.filter(f => !alreadyIn.has(f.users.find(u=>u!==currentUser.uid)));
+  if (!invitable.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:12px">All friends are already in this chat.</div>`;
+    return;
+  }
+  el.innerHTML = invitable.map(f => {
+    const fUid = f.users.find(u=>u!==currentUser.uid);
+    const fName = f.usernames?.[fUid] || (f.from===currentUser.uid?f.toUsername:f.fromUsername);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
+      <span style="font-size:12px;color:var(--text)">${esc(fName)}</span>
+      <button class="btn-accent-sm" style="font-size:11px;padding:4px 10px" onclick="inviteToChat('${key}','${fUid}','${esc(fName)}')">Invite</button>
+    </div>`;
+  }).join('');
+}
+
+window.inviteToChat = async function(key, friendUid, friendName) {
+  const notice = document.getElementById(`cw-inotice-${key}`);
+  if (notice) notice.innerHTML = '<span style="color:var(--muted)">Inviting…</span>';
+  const w = _chatWindows[key];
+  if (!w) return;
+  if (w.isGroup) {
+    const g = groups.find(g=>g.id===w.groupId);
+    if (!g) return;
+    await updateDoc(doc(db,'groupChats',w.groupId), {
+      members: [...g.members, friendUid],
+      memberNames: { ...(g.memberNames||{}), [friendUid]: friendName }
+    });
+    const payload = await groupEncrypt(w.groupId, `${friendName} was added to the group.`);
+    await addDoc(collection(db,'groupChats',w.groupId,'messages'),{
+      from: currentUser.uid, senderName: userProfile.username, ...payload, type:'system', ts: serverTimestamp()
+    });
+    if (notice) notice.innerHTML = `<span style="color:var(--accent)">✓ ${esc(friendName)} added!</span>`;
+    setTimeout(() => { if(notice) notice.innerHTML=''; _renderInvitePanel(key); }, 1500);
+  } else {
+    // Upgrade DM → group
+    const dmTitle = w.el.querySelector('span').textContent.replace('💬 ','').trim();
+    const groupName = `${userProfile.username}, ${dmTitle}, ${friendName}`;
+    const memberUids = [currentUser.uid, w.friendUid, friendUid];
+    const memberNames = {
+      [currentUser.uid]: userProfile.username,
+      [w.friendUid]: dmTitle,
+      [friendUid]: friendName
+    };
+    const ref = await addDoc(collection(db,'groupChats'),{
+      name: groupName, members: memberUids, memberNames,
+      createdBy: currentUser.uid, createdAt: serverTimestamp()
+    });
+    const payload = await groupEncrypt(ref.id, `${userProfile.username} created a group with ${dmTitle} and ${friendName}.`);
+    await addDoc(collection(db,'groupChats',ref.id,'messages'),{
+      from: currentUser.uid, senderName: userProfile.username, ...payload, type:'system', ts: serverTimestamp()
+    });
+    if (notice) notice.innerHTML = `<span style="color:var(--accent)">✓ Group created!</span>`;
+    setTimeout(() => { closeChatWindow(key); openGroupChat(ref.id, groupName); }, 800);
+  }
+};
 async function maybeAutoCleanChat(chatId) {
-  // Auto-clear if last clear was over 30 days ago (or never)
   try {
     const metaSnap = await getDoc(doc(db,'chats',chatId,'meta','clearLog'));
     const lastCleared = metaSnap.exists() ? metaSnap.data().lastCleared?.toDate() : null;
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now - 30*24*60*60*1000);
+    const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000);
     if (!lastCleared || lastCleared < thirtyDaysAgo) {
       const snap = await getDocs(collection(db,'chats',chatId,'messages'));
-      // Only delete messages older than 30 days
       const deletes = snap.docs
         .filter(d => d.data().ts?.toDate?.() < thirtyDaysAgo)
         .map(d => deleteDoc(doc(db,'chats',chatId,'messages',d.id)));
@@ -1896,113 +2011,6 @@ async function maybeAutoCleanChat(chatId) {
   } catch(e) { /* silently fail */ }
 }
 
-window.closeChatWindow = function() {
-  document.getElementById('chat-window').classList.add('hidden');
-  document.getElementById('chat-invite-btn').style.display = 'none';
-  _closeInvitePanel();
-  if (chatUnsub) { chatUnsub(); chatUnsub = null; }
-  activeChatFriendId = null;
-  activeChatIsGroup = false;
-  activeGroupId = null;
-};
-
-// ── Invite Panel ──
-function _closeInvitePanel() {
-  const p = document.getElementById('chat-invite-panel');
-  if (p) p.style.display = 'none';
-}
-
-window.toggleInvitePanel = function() {
-  const p = document.getElementById('chat-invite-panel');
-  if (p.style.display === 'none' || !p.style.display) {
-    _renderInvitePanel();
-    p.style.display = 'block';
-  } else {
-    p.style.display = 'none';
-  }
-};
-
-function _renderInvitePanel() {
-  const el = document.getElementById('invite-friends-list');
-  const notice = document.getElementById('invite-notice');
-  notice.innerHTML = '';
-
-  // Who's already in this chat?
-  let alreadyIn = new Set();
-  if (activeChatIsGroup && activeGroupId) {
-    const g = groups.find(g=>g.id===activeGroupId);
-    if (g) g.members.forEach(m => alreadyIn.add(m));
-  } else if (activeChatFriendId) {
-    alreadyIn.add(currentUser.uid);
-    alreadyIn.add(activeChatFriendId);
-  }
-
-  const invitable = friends.filter(f => {
-    const fUid = f.users.find(u=>u!==currentUser.uid);
-    return !alreadyIn.has(fUid);
-  });
-
-  if (!invitable.length) {
-    el.innerHTML = `<div style="color:var(--muted);font-size:12px">All friends are already in this chat.</div>`;
-    return;
-  }
-
-  el.innerHTML = invitable.map(f => {
-    const fUid = f.users.find(u=>u!==currentUser.uid);
-    const fName = f.usernames?.[fUid] || (f.from===currentUser.uid?f.toUsername:f.fromUsername);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
-      <span style="font-size:12px;color:var(--text)">${esc(fName)}</span>
-      <button class="btn-accent-sm" style="font-size:11px;padding:4px 10px" onclick="inviteToChat('${fUid}','${esc(fName)}')">Invite</button>
-    </div>`;
-  }).join('');
-}
-
-window.inviteToChat = async function(friendUid, friendName) {
-  const notice = document.getElementById('invite-notice');
-  notice.innerHTML = '<span style="color:var(--muted)">Inviting…</span>';
-
-  if (activeChatIsGroup && activeGroupId) {
-    // Add to existing group
-    const g = groups.find(g=>g.id===activeGroupId);
-    if (!g) return;
-    const newMembers = [...g.members, friendUid];
-    const newNames = { ...(g.memberNames||{}), [friendUid]: friendName };
-    await updateDoc(doc(db,'groupChats',activeGroupId), { members: newMembers, memberNames: newNames });
-    // Post a system-style message
-    const payload = await groupEncrypt(activeGroupId, `${friendName} was added to the group.`);
-    await addDoc(collection(db,'groupChats',activeGroupId,'messages'),{
-      from: currentUser.uid, senderName: userProfile.username, ...payload,
-      type: 'system', ts: serverTimestamp()
-    });
-    notice.innerHTML = `<span style="color:var(--accent)">✓ ${esc(friendName)} added!</span>`;
-  } else if (activeChatFriendId) {
-    // Upgrade 1:1 DM → new group chat with all three
-    const dmFriendName = document.getElementById('chat-title').textContent.replace('💬 ','').trim();
-    const groupName = `${userProfile.username}, ${dmFriendName}, ${friendName}`;
-    const memberUids = [currentUser.uid, activeChatFriendId, friendUid];
-    const memberNames = {
-      [currentUser.uid]: userProfile.username,
-      [activeChatFriendId]: dmFriendName,
-      [friendUid]: friendName
-    };
-    const ref = await addDoc(collection(db,'groupChats'),{
-      name: groupName, members: memberUids, memberNames,
-      createdBy: currentUser.uid, createdAt: serverTimestamp()
-    });
-    // Post welcome message
-    const payload = await groupEncrypt(ref.id, `${userProfile.username} created a group with ${dmFriendName} and ${friendName}.`);
-    await addDoc(collection(db,'groupChats',ref.id,'messages'),{
-      from: currentUser.uid, senderName: userProfile.username, ...payload,
-      type: 'system', ts: serverTimestamp()
-    });
-    notice.innerHTML = `<span style="color:var(--accent)">✓ Group created!</span>`;
-    // Switch to the new group chat
-    setTimeout(() => { _closeInvitePanel(); openGroupChat(ref.id, groupName); }, 800);
-    return;
-  }
-
-  setTimeout(() => { notice.innerHTML = ''; _renderInvitePanel(); }, 1500);
-};
 // ── Chat Filter ──
 const BUILTIN_BLOCKED = [
   // profanity
