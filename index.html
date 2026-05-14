@@ -1682,54 +1682,75 @@ async function _unwrapPrivateKey(blob, wrappingKey) {
 async function initCrypto(uid, password) {
   Object.keys(_keyCache).forEach(k => delete _keyCache[k]);
   _myPrivateKey = null; _myPublicKeyJwk = null;
-  try {
-    const userData = (await getDoc(doc(db,'users',uid))).data() || {};
-    const blob = userData.encryptedKey;
 
-    // Try unwrapping stored blob with password
-    if (blob?.wrapped && password) {
-      try {
+  // ── Step 1: Get or generate the private key ──
+  // Try localStorage first (fastest, works after first login on same device)
+  const cached = localStorage.getItem(`e2e_${uid}`);
+  if (cached) {
+    try {
+      _myPrivateKey = await crypto.subtle.importKey(
+        'jwk', JSON.parse(cached), { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
+    } catch(_) {
+      localStorage.removeItem(`e2e_${uid}`);
+    }
+  }
+
+  // Try unwrapping from Firestore blob using password
+  if (!_myPrivateKey && password) {
+    try {
+      const snap = await getDoc(doc(db,'users',uid));
+      const blob = (snap.data() || {}).encryptedKey;
+      if (blob?.wrapped) {
         const wk = await _deriveWrappingKey(password, blob.salt);
         _myPrivateKey   = await _unwrapPrivateKey(blob, wk);
         _myPublicKeyJwk = blob.pubKey;
-      } catch(_) { _myPrivateKey = null; }
-    }
-
-    // Try cached private key in localStorage
-    if (!_myPrivateKey) {
-      const raw = localStorage.getItem(`e2e_${uid}`);
-      if (raw) {
-        try {
-          _myPrivateKey   = await crypto.subtle.importKey('jwk', JSON.parse(raw), { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
-          _myPublicKeyJwk = userData.pubKey || blob?.pubKey || null;
-        } catch(_) { localStorage.removeItem(`e2e_${uid}`); _myPrivateKey = null; }
       }
-    }
+    } catch(_) {}
+  }
 
-    // Generate fresh keypair if still nothing
-    if (!_myPrivateKey) {
-      if (!password) return;
-      const kp = await crypto.subtle.generateKey({ name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
-      _myPrivateKey   = kp.privateKey;
-      _myPublicKeyJwk = await crypto.subtle.exportKey('jwk', kp.publicKey);
-      const salt = crypto.getRandomValues(new Uint8Array(16));
-      const wk   = await _deriveWrappingKey(password, salt);
-      const { iv, wrapped } = await _wrapPrivateKey(_myPrivateKey, wk);
-      await setDoc(doc(db,'users',uid), {
-        encryptedKey: { iv, wrapped, salt: _b64(salt.buffer), pubKey: _myPublicKeyJwk },
-        pubKey: _myPublicKeyJwk
-      }, { merge:true });
-    }
+  // Generate a brand new keypair as last resort
+  if (!_myPrivateKey) {
+    const kp = await crypto.subtle.generateKey(
+      { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
+    _myPrivateKey   = kp.privateKey;
+    _myPublicKeyJwk = await crypto.subtle.exportKey('jwk', kp.publicKey);
+  }
 
-    // Cache and publish
-    if (_myPrivateKey) {
-      const jwk = await crypto.subtle.exportKey('jwk', _myPrivateKey).catch(()=>null);
-      if (jwk) localStorage.setItem(`e2e_${uid}`, JSON.stringify(jwk));
-      if (_myPublicKeyJwk)
-        await setDoc(doc(db,'users',uid), { pubKey: _myPublicKeyJwk }, { merge:true });
-    }
-  } catch(e) { console.warn('initCrypto:', e); }
+  // Derive public key if we loaded the private key but don't have the public yet
+  if (_myPrivateKey && !_myPublicKeyJwk) {
+    try {
+      // Re-export to get public key from private key JWK (contains both for ECDH extractable keys)
+      const privJwk = await crypto.subtle.exportKey('jwk', _myPrivateKey);
+      // Build public JWK by stripping private fields
+      _myPublicKeyJwk = { kty: privJwk.kty, crv: privJwk.crv, x: privJwk.x, y: privJwk.y, key_ops: [], ext: true };
+    } catch(_) {}
+  }
+
+  // ── Step 2: Persist everything (non-blocking, errors don't matter) ──
+  // Cache private key in localStorage immediately
+  crypto.subtle.exportKey('jwk', _myPrivateKey)
+    .then(jwk => localStorage.setItem(`e2e_${uid}`, JSON.stringify(jwk)))
+    .catch(()=>{});
+
+  // Write pubKey + encrypted blob to Firestore in background
+  if (_myPublicKeyJwk && password) {
+    (async () => {
+      try {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const wk   = await _deriveWrappingKey(password, salt);
+        const { iv, wrapped } = await _wrapPrivateKey(_myPrivateKey, wk);
+        await setDoc(doc(db,'users',uid), {
+          pubKey: _myPublicKeyJwk,
+          encryptedKey: { iv, wrapped, salt: _b64(salt.buffer), pubKey: _myPublicKeyJwk }
+        }, { merge:true });
+      } catch(e) { console.warn('initCrypto persist:', e); }
+    })();
+  } else if (_myPublicKeyJwk) {
+    // No password but still publish pubKey so friends can find it
+    setDoc(doc(db,'users',uid), { pubKey: _myPublicKeyJwk }, { merge:true }).catch(()=>{});
+  }
 }
+
 
 async function reWrapKeyAfterPasswordChange(uid, newPassword) {
   if (!_myPrivateKey || !_myPublicKeyJwk) return;
@@ -1748,17 +1769,21 @@ async function reWrapKeyAfterPasswordChange(uid, newPassword) {
 async function getSharedKey(friendUid) {
   if (_keyCache[friendUid]) return _keyCache[friendUid];
   if (!_myPrivateKey) return null;
-  try {
-    const snap   = await getDoc(doc(db,'users',friendUid));
-    const pubJwk = snap.data()?.pubKey;
-    if (!pubJwk) return null;
-    const theirPub = await crypto.subtle.importKey('jwk', pubJwk, { name:'ECDH', namedCurve:'P-256' }, false, []);
-    const shared   = await crypto.subtle.deriveKey(
-      { name:'ECDH', public:theirPub }, _myPrivateKey,
-      { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
-    _keyCache[friendUid] = shared;
-    return shared;
-  } catch(e) { return null; }
+  // Retry a few times — pubKey Firestore write may still be in-flight
+  for (let i = 0; i < 3; i++) {
+    try {
+      const snap   = await getDoc(doc(db,'users',friendUid));
+      const pubJwk = snap.data()?.pubKey;
+      if (!pubJwk) { await new Promise(r => setTimeout(r, 1500)); continue; }
+      const theirPub = await crypto.subtle.importKey('jwk', pubJwk, { name:'ECDH', namedCurve:'P-256' }, false, []);
+      const shared   = await crypto.subtle.deriveKey(
+        { name:'ECDH', public:theirPub }, _myPrivateKey,
+        { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+      _keyCache[friendUid] = shared;
+      return shared;
+    } catch(e) { return null; }
+  }
+  return null;
 }
 
 async function e2eEncrypt(friendUid, plaintext) {
@@ -1797,8 +1822,8 @@ window.sendChatMsg = async function() {
       // Friend hasn't set up their encryption key yet — show why
       const myKeyReady = _myPrivateKey !== null;
       setNotice('chat-notice', myKeyReady
-        ? '🔒 Waiting for friend to log in once to set up encryption.'
-        : '🔒 Encryption not ready — please log out and back in.', 'error');
+        ? '🔒 Your friend\'s encryption key isn\'t ready yet — ask them to refresh the page, then try again.'
+        : '🔒 Your encryption key isn\'t ready — please log out and back in.', 'error');
     }
     return;
   }
