@@ -1683,19 +1683,22 @@ async function initCrypto(uid, password) {
   Object.keys(_keyCache).forEach(k => delete _keyCache[k]);
   _myPrivateKey = null; _myPublicKeyJwk = null;
 
-  // ── Step 1: Get or generate the private key ──
-  // Try localStorage first (fastest, works after first login on same device)
+  // ── Step 1: Try to load existing private key ──
+
+  // 1a. localStorage (fastest)
   const cached = localStorage.getItem(`e2e_${uid}`);
   if (cached) {
     try {
-      _myPrivateKey = await crypto.subtle.importKey(
-        'jwk', JSON.parse(cached), { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
+      const jwk = JSON.parse(cached);
+      _myPrivateKey   = await crypto.subtle.importKey('jwk', jwk, { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
+      _myPublicKeyJwk = { kty:jwk.kty, crv:jwk.crv, x:jwk.x, y:jwk.y, key_ops:[], ext:true };
     } catch(_) {
       localStorage.removeItem(`e2e_${uid}`);
+      _myPrivateKey = null; _myPublicKeyJwk = null;
     }
   }
 
-  // Try unwrapping from Firestore blob using password
+  // 1b. Firestore blob (cross-device, needs password)
   if (!_myPrivateKey && password) {
     try {
       const snap = await getDoc(doc(db,'users',uid));
@@ -1704,50 +1707,42 @@ async function initCrypto(uid, password) {
         const wk = await _deriveWrappingKey(password, blob.salt);
         _myPrivateKey   = await _unwrapPrivateKey(blob, wk);
         _myPublicKeyJwk = blob.pubKey;
+        // Re-cache in localStorage
+        const jwk = await crypto.subtle.exportKey('jwk', _myPrivateKey);
+        localStorage.setItem(`e2e_${uid}`, JSON.stringify(jwk));
       }
-    } catch(_) {}
+    } catch(_) { _myPrivateKey = null; }
   }
 
-  // Generate a brand new keypair as last resort
+  // 1c. Generate fresh keypair
   if (!_myPrivateKey) {
-    const kp = await crypto.subtle.generateKey(
-      { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
-    _myPrivateKey   = kp.privateKey;
-    _myPublicKeyJwk = await crypto.subtle.exportKey('jwk', kp.publicKey);
+    const kp = await crypto.subtle.generateKey({ name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
+    _myPrivateKey = kp.privateKey;
+    const jwk = await crypto.subtle.exportKey('jwk', kp.publicKey);
+    _myPublicKeyJwk = jwk;
+    // Cache immediately
+    const privJwk = await crypto.subtle.exportKey('jwk', _myPrivateKey);
+    localStorage.setItem(`e2e_${uid}`, JSON.stringify(privJwk));
   }
 
-  // Derive public key if we loaded the private key but don't have the public yet
-  if (_myPrivateKey && !_myPublicKeyJwk) {
-    try {
-      // Re-export to get public key from private key JWK (contains both for ECDH extractable keys)
-      const privJwk = await crypto.subtle.exportKey('jwk', _myPrivateKey);
-      // Build public JWK by stripping private fields
-      _myPublicKeyJwk = { kty: privJwk.kty, crv: privJwk.crv, x: privJwk.x, y: privJwk.y, key_ops: [], ext: true };
-    } catch(_) {}
-  }
+  // ── Step 2: Write pubKey to Firestore RIGHT NOW (awaited, not background) ──
+  // This is fast — it's just a string write, no PBKDF2
+  try {
+    await setDoc(doc(db,'users',uid), { pubKey: _myPublicKeyJwk }, { merge:true });
+  } catch(e) { console.warn('initCrypto: failed to write pubKey:', e); }
 
-  // ── Step 2: Persist everything (non-blocking, errors don't matter) ──
-  // Cache private key in localStorage immediately
-  crypto.subtle.exportKey('jwk', _myPrivateKey)
-    .then(jwk => localStorage.setItem(`e2e_${uid}`, JSON.stringify(jwk)))
-    .catch(()=>{});
-
-  // Write pubKey + encrypted blob to Firestore in background
-  if (_myPublicKeyJwk && password) {
+  // ── Step 3: Wrap and store encrypted blob in background (slow PBKDF2) ──
+  if (password && _myPrivateKey) {
     (async () => {
       try {
         const salt = crypto.getRandomValues(new Uint8Array(16));
         const wk   = await _deriveWrappingKey(password, salt);
         const { iv, wrapped } = await _wrapPrivateKey(_myPrivateKey, wk);
         await setDoc(doc(db,'users',uid), {
-          pubKey: _myPublicKeyJwk,
           encryptedKey: { iv, wrapped, salt: _b64(salt.buffer), pubKey: _myPublicKeyJwk }
         }, { merge:true });
-      } catch(e) { console.warn('initCrypto persist:', e); }
+      } catch(e) { console.warn('initCrypto: blob persist failed:', e); }
     })();
-  } else if (_myPublicKeyJwk) {
-    // No password but still publish pubKey so friends can find it
-    setDoc(doc(db,'users',uid), { pubKey: _myPublicKeyJwk }, { merge:true }).catch(()=>{});
   }
 }
 
