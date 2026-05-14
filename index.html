@@ -2003,66 +2003,106 @@ function _renderInvitePanel(key) {
     el.innerHTML = `<div style="color:var(--muted);font-size:12px">All friends are already in this chat.</div>`;
     return;
   }
+  const btnLabel = w.isGroup ? 'Send Invites' : 'Create Group & Invite';
+  // Hidden checkboxes drive selection; visible rows show toggle buttons
   el.innerHTML = invitable.map(f => {
     const fUid = f.users.find(u=>u!==currentUser.uid);
     const fName = f.usernames?.[fUid] || (f.from===currentUser.uid?f.toUsername:f.fromUsername);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
-      <span style="font-size:12px;color:var(--text)">${esc(fName)}</span>
-      <button class="btn-accent-sm" style="font-size:11px;padding:4px 10px" onclick="inviteToChat('${key}','${fUid}','${esc(fName)}')">Invite</button>
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;gap:8px" id="irow-${safeKey}-${fUid}">
+      <span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(fName)}</span>
+      <input type="checkbox" class="invite-check-${safeKey}" id="ichk-${safeKey}-${fUid}" data-uid="${fUid}" data-name="${esc(fName)}" style="display:none">
+      <button class="win-btn" id="ibtn-${safeKey}-${fUid}" style="font-size:11px;padding:3px 10px;flex-shrink:0"
+        onclick="toggleInvitePick('${safeKey}','${fUid}')">Invite</button>
     </div>`;
   }).join('');
+  notice.innerHTML = `<button class="btn-accent-sm" style="width:100%;margin-top:6px" onclick="inviteChecked('${key}')">${btnLabel}</button>`;
 }
 
-window.inviteToChat = async function(key, friendUid, friendName) {
+window.toggleInvitePick = function(safeKey, uid) {
+  const chk = document.getElementById(`ichk-${safeKey}-${uid}`);
+  const btn = document.getElementById(`ibtn-${safeKey}-${uid}`);
+  if (!chk || !btn) return;
+  chk.checked = !chk.checked;
+  if (chk.checked) {
+    btn.textContent = '\u2713 Invited';
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+  } else {
+    btn.textContent = 'Invite';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }
+};
+
+window.inviteChecked = async function(key) {
+  const safeKey = key.replace(':','-');
+  const checkboxes = document.querySelectorAll(`.invite-check-${safeKey}:checked`);
+  if (!checkboxes.length) {
+    const notice = document.getElementById(`cw-inotice-${safeKey}`);
+    if (notice) notice.innerHTML = '<span style="color:var(--muted);font-size:11px">Select at least one person.</span>';
+    return;
+  }
+  const selected = Array.from(checkboxes).map(cb => ({ uid: cb.dataset.uid, name: cb.dataset.name }));
+  await inviteToChat(key, selected);
+};
+window.inviteToChat = async function(key, invitees) {
+  // invitees: array of {uid, name} from inviteChecked
   const safeKey = key.replace(':','-');
   const notice = document.getElementById(`cw-inotice-${safeKey}`);
-  if (notice) notice.innerHTML = '<span style="color:var(--muted)">Inviting…</span>';
   const w = _chatWindows[key];
-  if (!w) return;
+  if (!w || !invitees || !invitees.length) return;
+  if (notice) notice.innerHTML = '<span style="color:var(--muted)">Creating...</span>';
 
   if (w.isGroup) {
-    // Invite to existing group
     const g = groups.find(g=>g.id===w.groupId);
     if (!g) return;
-    await addDoc(collection(db,'groupInvites'),{
-      to: friendUid, toUsername: friendName,
+    const names = invitees.map(i=>i.name).join(', ');
+    const announcePayload = await groupEncrypt(w.groupId, `${userProfile.username} invited ${names} to the group. Waiting for them to accept.`);
+    await addDoc(collection(db,'groupChats',w.groupId,'messages'),{
+      from: currentUser.uid, senderName: userProfile.username, ...announcePayload, type:'system', ts: serverTimestamp()
+    });
+    await Promise.all(invitees.map(inv => addDoc(collection(db,'groupInvites'),{
+      to: inv.uid, toUsername: inv.name,
       from: currentUser.uid, fromUsername: userProfile.username,
       groupId: w.groupId, groupName: g.name,
       status: 'pending', createdAt: serverTimestamp()
-    });
-    if (notice) notice.innerHTML = `<span style="color:var(--accent)">✓ Invite sent to ${esc(friendName)}!</span>`;
-    setTimeout(() => { if(notice) notice.innerHTML=''; _renderInvitePanel(key); }, 1500);
+    })));
+    if (notice) notice.innerHTML = `<span style="color:var(--accent)">\u2713 Invites sent to ${esc(names)}!</span>`;
+    setTimeout(() => { if(notice) notice.innerHTML=''; _renderInvitePanel(key); }, 1800);
   } else {
-    // Upgrade DM → new group, invite the third person
-    const dmTitle = w.el.querySelector('span').textContent.replace('💬 ','').trim();
-    const groupName = `${userProfile.username}, ${dmTitle}, ${friendName}`;
+    // Upgrade DM to group with multiple invitees
+    const dmTitle = w.el.querySelector('span').textContent.replace('\u{1F4AC} ','').trim();
+    const inviteNames = invitees.map(i=>i.name).join(', ');
+    const groupName = [userProfile.username, dmTitle, ...invitees.map(i=>i.name)].join(', ');
     const memberUids = [currentUser.uid, w.friendUid];
     const memberNames = {
       [currentUser.uid]: userProfile.username,
       [w.friendUid]: dmTitle
     };
-    // Create the group with only the two existing DM participants as full members
     const ref = await addDoc(collection(db,'groupChats'),{
       name: groupName, members: memberUids, memberNames,
       createdBy: currentUser.uid, createdAt: serverTimestamp()
     });
-    // Post a system message
-    const payload = await groupEncrypt(ref.id, `${userProfile.username} created a group and invited ${friendName}.`);
+    const groupPayload = await groupEncrypt(ref.id, `${userProfile.username} created a group and invited ${inviteNames}.`);
     await addDoc(collection(db,'groupChats',ref.id,'messages'),{
-      from: currentUser.uid, senderName: userProfile.username, ...payload, type:'system', ts: serverTimestamp()
+      from: currentUser.uid, senderName: userProfile.username, ...groupPayload, type:'system', ts: serverTimestamp()
     });
-    // Send invite to the third person
-    await addDoc(collection(db,'groupInvites'),{
-      to: friendUid, toUsername: friendName,
+    await Promise.all(invitees.map(inv => addDoc(collection(db,'groupInvites'),{
+      to: inv.uid, toUsername: inv.name,
       from: currentUser.uid, fromUsername: userProfile.username,
       groupId: ref.id, groupName,
       status: 'pending', createdAt: serverTimestamp()
+    })));
+    const chatId = [currentUser.uid, w.friendUid].sort().join('_');
+    const dmPayload = await e2eEncrypt(w.friendUid, `I created a group chat with ${inviteNames} invited, continue our chat there.`);
+    await addDoc(collection(db,'chats',chatId,'messages'),{
+      from: currentUser.uid, ...dmPayload, ts: serverTimestamp()
     });
-    // Close DM, open the new group right away
     closeChatWindow(key);
     openGroupChat(ref.id, groupName);
   }
 };
+
 async function maybeAutoCleanChat(chatId) {
   try {
     const metaSnap = await getDoc(doc(db,'chats',chatId,'meta','clearLog'));
@@ -2460,13 +2500,11 @@ function makeDraggable(el, handle, id, type) {
     if (e.target.tagName==='INPUT' && !e.target.hasAttribute('readonly')) return;
     e.preventDefault();
     if (e.target.tagName==='INPUT') { e.target.blur(); }
-    const rect = el.getBoundingClientRect();
-    sx=e.clientX-rect.left; sy=e.clientY-rect.top;
+    sx=e.clientX-el.offsetLeft; sy=e.clientY-el.offsetTop;
 
     const onMove = e => {
       ex=e.clientX-sx; ey=e.clientY-sy;
       el.style.left=ex+'px'; el.style.top=ey+'px';
-      if (type==='chat') { el.style.right='auto'; el.style.bottom='auto'; }
 
       if (type==='sticky') {
         // highlight any target sticky header we're hovering over
@@ -2698,6 +2736,7 @@ window.undoDeleteSticky = async function() {
   const el=document.getElementById(id);
   if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.add('hidden');});
 });
+
 </script>
 </body>
-</html> 
+</html>
