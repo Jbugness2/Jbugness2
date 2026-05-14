@@ -223,6 +223,17 @@ select { cursor:pointer; }
 
 .hidden { display: none !important; }
 
+/* ── Undo Toast ── */
+#undo-toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 18px; font-size: 12px; color: var(--text); z-index: 9999;
+  display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none;
+}
+#undo-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: all; }
+#undo-toast button { background: var(--accent); color: #0e0e11; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-ui); }
+
 /* ── Side Panel ── */
 .side-panel-btn {
   width: 44px; height: 44px; border-radius: 12px;
@@ -385,9 +396,19 @@ select { cursor:pointer; }
     <div class="modal">
       <h3>Share Task</h3>
       <div id="share-notice"></div>
-      <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Send this task to a friend. They'll receive a request to add it.</p>
-      <label>Select Friend</label>
-      <select id="share-friend-select" style="margin-bottom:14px"></select>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Send this task to a friend or group chat.</p>
+      <div style="display:flex;gap:0;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <button id="share-tab-friend" onclick="switchShareTab('friend')" style="flex:1;padding:9px;font-size:12px;font-family:var(--font-ui);border:none;background:var(--accent);color:#0e0e11;font-weight:700;cursor:pointer">Friend</button>
+        <button id="share-tab-group" onclick="switchShareTab('group')" style="flex:1;padding:9px;font-size:12px;font-family:var(--font-ui);border:none;background:var(--surface2);color:var(--muted);cursor:pointer">Group</button>
+      </div>
+      <div id="share-friend-section">
+        <label>Select Friend</label>
+        <select id="share-friend-select" style="margin-bottom:14px"></select>
+      </div>
+      <div id="share-group-section" class="hidden">
+        <label>Select Group</label>
+        <select id="share-group-select" style="margin-bottom:14px"></select>
+      </div>
       <div class="modal-btns">
         <button class="btn btn-primary" onclick="sendTaskShare()">Send Task</button>
         <button class="btn btn-ghost" onclick="closeShareTask()">Cancel</button>
@@ -601,6 +622,7 @@ select { cursor:pointer; }
       <span class="window-title" style="flex:1;min-width:0">👥 Friends</span>
       <div class="window-controls" style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="win-btn" onclick="switchFriendsTab('friends')">Friends</button>
+        <button class="win-btn" onclick="switchFriendsTab('groups')">Groups <span id="group-notif-count"></span></button>
         <button class="win-btn" onclick="switchFriendsTab('requests')">Requests <span id="req-count"></span></button>
         <button class="win-btn" onclick="switchFriendsTab('add')">＋ Add</button>
         <button class="win-btn" onclick="closeFriendsWindow()">✕</button>
@@ -608,6 +630,16 @@ select { cursor:pointer; }
     </div>
     <!-- Friends list tab -->
     <div id="tab-friends" class="window-body"></div>
+    <!-- Groups tab -->
+    <div id="tab-groups" class="window-body hidden">
+      <div id="groups-list"></div>
+      <hr class="divider" style="margin:10px 0">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Create Group</div>
+      <input type="text" id="new-group-name" placeholder="Group name…" style="margin-bottom:8px;font-size:13px">
+      <div id="group-member-checkboxes" style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto"></div>
+      <button class="btn-accent-sm" style="width:100%" onclick="createGroup()">Create Group Chat</button>
+      <div id="group-create-notice" style="margin-top:8px;font-size:12px"></div>
+    </div>
     <!-- Requests tab -->
     <div id="tab-requests" class="window-body hidden"></div>
     <!-- Add friend tab -->
@@ -674,9 +706,15 @@ let tasks         = [];
 let stickies      = [];
 let friends       = [];
 let friendRequests = [];
+let groups        = [];
+let activeGroupId = null;
+let groupUnsub    = null;
+let groupChatUnsubs = {};
+let unreadGroups  = new Set();
 let editingTaskId = null;
 let sharingTaskId = null;
 let activeChatFriendId = null;
+let activeChatIsGroup  = false;
 let chatUnsub    = null;
 let tasksUnsub   = null;
 let stickiesUnsub = null;
@@ -707,6 +745,7 @@ onAuthStateChanged(auth, async user => {
     subscribeToStickies(user.uid);
     subscribeToFriends(user.uid);
     subscribeToRequests(user.uid);
+    subscribeToGroups(user.uid);
     loadBlockedWords(); // fire-and-forget, non-admin gets denied fast
     showScreen('dash');
     initPanelSide();
@@ -715,13 +754,14 @@ onAuthStateChanged(auth, async user => {
     maybeAutoEmail();
   } else if (!user || _didLogOut) {
     currentUser = null; userProfile = null; tasks = []; stickies = [];
-    friends = []; friendRequests = []; selectedIds.clear(); selectMode = false;
-    unreadChats.clear(); activeChatFriendId = null;
+    friends = []; friendRequests = []; groups = []; selectedIds.clear(); selectMode = false;
+    unreadChats.clear(); unreadGroups.clear(); activeChatFriendId = null; activeGroupId = null; activeChatIsGroup = false;
 
     // Unsubscribe all listeners
-    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, chatUnsub].forEach(u => u && u());
+    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, chatUnsub, groupUnsub].forEach(u => u && u());
     chatNotifUnsubs.forEach(u => u()); chatNotifUnsubs = [];
-    tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = chatUnsub = null;
+    Object.values(groupChatUnsubs).forEach(u => u && u()); groupChatUnsubs = {};
+    tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = chatUnsub = groupUnsub = null;
 
     // Close every floating window and the side panel
     ['friends-window','chat-window','side-panel'].forEach(id => {
@@ -762,16 +802,22 @@ async function saveProfile(data) {
 function subscribeToTasks(uid) {
   if (tasksUnsub) tasksUnsub();
   tasksUnsub = onSnapshot(collection(db, 'users', uid, 'tasks'), snap => {
-    tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderDash();
-    if (calOpen) renderCalendar();
+    Promise.all(snap.docs.map(async d => {
+      const data = d.data();
+      return { id: d.id, ...data, name: await userDecrypt(data.name) };
+    })).then(decrypted => { tasks = decrypted; renderDash(); if (calOpen) renderCalendar(); });
+    return; // renderDash called inside promise
   });
 }
 function subscribeToStickies(uid) {
   if (stickiesUnsub) stickiesUnsub();
   stickiesUnsub = onSnapshot(collection(db, 'users', uid, 'stickies'), snap => {
-    stickies = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderAllStickies();
+    Promise.all(snap.docs.map(async d => {
+      const data = d.data();
+      return { id: d.id, ...data,
+        title:   await userDecrypt(data.title),
+        content: await userDecrypt(data.content) };
+    })).then(decrypted => { stickies = decrypted; renderAllStickies(); });
   });
 }
 function subscribeToFriends(uid) {
@@ -804,11 +850,7 @@ function subscribeToUnreadChats(uid) {
         } else if (activeChatFriendId === friendUid) {
           unreadChats.delete(friendUid);
         }
-        // update friends button badge
-        const btn = document.getElementById('friend-notif');
-        const totalNotifs = friendRequests.length + unreadChats.size;
-        if (totalNotifs > 0) { btn.textContent = totalNotifs; btn.classList.remove('hidden'); }
-        else btn.classList.add('hidden');
+        updateFriendBadge();
         renderFriendsList();
       }
     );
@@ -835,6 +877,235 @@ function subscribeToRequests(uid) {
     }
   );
 }
+
+// ── Groups ──
+function subscribeToGroups(uid) {
+  if (groupUnsub) groupUnsub();
+  groupUnsub = onSnapshot(
+    query(collection(db,'groupChats'), where('members','array-contains',uid)),
+    snap => {
+      groups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderGroupsList();
+      subscribeToGroupUnread(uid);
+    }
+  );
+}
+
+function subscribeToGroupUnread(uid) {
+  // Clean up old listeners not in current groups
+  const currentGroupIds = new Set(groups.map(g=>g.id));
+  Object.keys(groupChatUnsubs).forEach(gid => {
+    if (!currentGroupIds.has(gid)) { groupChatUnsubs[gid]?.(); delete groupChatUnsubs[gid]; }
+  });
+  groups.forEach(g => {
+    if (groupChatUnsubs[g.id]) return; // already listening
+    groupChatUnsubs[g.id] = onSnapshot(
+      query(collection(db,'groupChats',g.id,'messages'), orderBy('ts')),
+      snap => {
+        const msgs = snap.docs.map(d=>d.data());
+        const last = msgs[msgs.length-1];
+        if (last && last.from !== uid && !(activeChatIsGroup && activeGroupId === g.id)) {
+          unreadGroups.add(g.id);
+        } else if (activeChatIsGroup && activeGroupId === g.id) {
+          unreadGroups.delete(g.id);
+        }
+        updateFriendBadge();
+        renderGroupsList();
+      }
+    );
+  });
+}
+
+function updateFriendBadge() {
+  const btn = document.getElementById('friend-notif');
+  if (!btn) return;
+  const total = friendRequests.length + unreadChats.size + unreadGroups.size;
+  if (total > 0) { btn.textContent = total; btn.classList.remove('hidden'); }
+  else btn.classList.add('hidden');
+}
+
+function renderGroupsList() {
+  const el = document.getElementById('groups-list');
+  if (!el) return;
+  // Populate member checkboxes for create form
+  const cbContainer = document.getElementById('group-member-checkboxes');
+  if (cbContainer) {
+    cbContainer.innerHTML = friends.map(f => {
+      const fUid = f.users.find(u=>u!==currentUser.uid);
+      const fName = f.usernames?.[fUid] || (f.from===currentUser.uid?f.toUsername:f.fromUsername);
+      return `<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="checkbox" value="${fUid}" data-name="${esc(fName)}" style="accent-color:var(--accent);width:14px;height:14px">
+        ${esc(fName)}
+      </label>`;
+    }).join('');
+  }
+  // Update group unread badge count
+  const badge = document.getElementById('group-notif-count');
+  if (badge) badge.textContent = unreadGroups.size > 0 ? `(${unreadGroups.size})` : '';
+
+  if (!groups.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:8px 0 12px">No groups yet — create one below.</div>`;
+    return;
+  }
+  el.innerHTML = groups.map(g => {
+    const hasUnread = unreadGroups.has(g.id);
+    const memberCount = g.members?.length || 0;
+    return `<div class="friend-item" style="flex-direction:column;align-items:flex-start;gap:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+        <div>
+          <div class="friend-name">👥 ${esc(g.name)} ${hasUnread?'<span style="color:var(--accent);font-size:11px">● new</span>':''}</div>
+          <div class="friend-status">${memberCount} member${memberCount!==1?'s':''}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-accent-sm" onclick="openGroupChat('${g.id}','${esc(g.name)}')">💬${hasUnread?'🔴':''}</button>
+          ${g.createdBy===currentUser.uid
+            ? `<button class="win-btn" style="color:var(--danger)" onclick="deleteGroup('${g.id}','${esc(g.name)}')">Delete</button>`
+            : `<button class="win-btn" onclick="leaveGroup('${g.id}','${esc(g.name)}')">Leave</button>`}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.createGroup = async function() {
+  const name = document.getElementById('new-group-name').value.trim();
+  const notice = document.getElementById('group-create-notice');
+  if (!name) { notice.innerHTML = '<span style="color:var(--danger)">Enter a group name.</span>'; return; }
+  const checked = [...document.querySelectorAll('#group-member-checkboxes input:checked')];
+  if (!checked.length) { notice.innerHTML = '<span style="color:var(--danger)">Select at least one friend.</span>'; return; }
+  const memberUids = [currentUser.uid, ...checked.map(c=>c.value)];
+  const memberNames = { [currentUser.uid]: userProfile.username };
+  checked.forEach(c => { memberNames[c.value] = c.dataset.name; });
+  await addDoc(collection(db,'groupChats'),{
+    name, members: memberUids, memberNames,
+    createdBy: currentUser.uid, createdAt: serverTimestamp()
+  });
+  document.getElementById('new-group-name').value = '';
+  checked.forEach(c => c.checked = false);
+  notice.innerHTML = `<span style="color:var(--accent)">✓ Group "${esc(name)}" created!</span>`;
+  setTimeout(() => { if (notice) notice.innerHTML = ''; }, 2500);
+};
+
+window.leaveGroup = async function(groupId, name) {
+  if (!confirm(`Leave "${name}"?`)) return;
+  const g = groups.find(g=>g.id===groupId); if (!g) return;
+  const newMembers = g.members.filter(m=>m!==currentUser.uid);
+  if (newMembers.length === 0) {
+    await deleteDoc(doc(db,'groupChats',groupId));
+  } else {
+    await updateDoc(doc(db,'groupChats',groupId),{ members: newMembers });
+  }
+};
+
+window.deleteGroup = async function(groupId, name) {
+  if (!confirm(`Delete group "${name}" for everyone?`)) return;
+  const msgs = await getDocs(collection(db,'groupChats',groupId,'messages'));
+  const batch = writeBatch(db);
+  msgs.docs.forEach(d => batch.delete(doc(db,'groupChats',groupId,'messages',d.id)));
+  batch.delete(doc(db,'groupChats',groupId));
+  await batch.commit();
+};
+
+// ── Group Chat encryption ──
+// Key derived from sorted member UIDs joined — all members independently arrive at same key
+async function getGroupKey(groupId) {
+  if (_chatKeyCache['g_'+groupId]) return _chatKeyCache['g_'+groupId];
+  const g = groups.find(g=>g.id===groupId);
+  const secret = (g ? [...g.members].sort().join(':') : groupId) + ':group';
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: new TextEncoder().encode('taskr-group-v1'), iterations:100000, hash:'SHA-256' },
+    base, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+  _chatKeyCache['g_'+groupId] = key;
+  return key;
+}
+
+async function groupEncrypt(groupId, plaintext) {
+  const key = await getGroupKey(groupId);
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const enc = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
+  return { iv: _b64(iv.buffer), ct: _b64(enc) };
+}
+
+async function groupDecrypt(groupId, msg) {
+  if (!msg.ct) return msg.text || '';
+  try {
+    const key = await getGroupKey(groupId);
+    const dec = await crypto.subtle.decrypt({ name:'AES-GCM', iv: new Uint8Array(_ub64(msg.iv)) }, key, _ub64(msg.ct));
+    return new TextDecoder().decode(dec);
+  } catch(_) { return '🔒 could not decrypt'; }
+}
+
+window.openGroupChat = function(groupId, groupName) {
+  activeGroupId = groupId;
+  activeChatIsGroup = true;
+  activeChatFriendId = null;
+  unreadGroups.delete(groupId);
+  updateFriendBadge();
+  renderGroupsList();
+  document.getElementById('chat-title').textContent = `👥 ${groupName}`;
+  document.getElementById('chat-window').classList.remove('hidden');
+  if (chatUnsub) { chatUnsub(); chatUnsub = null; }
+  chatUnsub = onSnapshot(
+    query(collection(db,'groupChats',groupId,'messages'), orderBy('ts')),
+    snap => {
+      const msgs = snap.docs.map(d=>({id:d.id,...d.data()}));
+      const container = document.getElementById('chat-messages');
+      const gid = activeGroupId;
+      const g = groups.find(g=>g.id===gid);
+      Promise.all(msgs.map(async m => {
+        const plaintext = await groupDecrypt(gid, m);
+        const mine = m.from === currentUser.uid;
+        const senderName = g?.memberNames?.[m.from] || m.from;
+        const time = m.ts?.toDate ? m.ts.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+        // Task share message — render with add button
+        const tsMatch = plaintext.match(/\[taskshare:(.*?)\]$/s);
+        if (tsMatch) {
+          let taskData = null;
+          try { taskData = JSON.parse(tsMatch[1]); } catch(_) {}
+          const displayText = plaintext.replace(/\[taskshare:.*?\]$/s,'').trim();
+          const addBtn = !mine && taskData
+            ? `<button onclick='addSharedGroupTask(${JSON.stringify(taskData)})' style="margin-top:6px;background:var(--accent);color:#0e0e11;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font-ui)">+ Add to my tasks</button>`
+            : '';
+          return `<div class="chat-msg ${mine?'mine':'theirs'}">
+            ${!mine ? `<div style="font-size:10px;opacity:.6;margin-bottom:2px">${esc(senderName)}</div>` : ''}
+            ${esc(displayText)}
+            ${addBtn}
+            <div class="chat-msg-time">${time}</div>
+          </div>`;
+        }
+        return `<div class="chat-msg ${mine?'mine':'theirs'}">
+          ${!mine ? `<div style="font-size:10px;opacity:.6;margin-bottom:2px">${esc(senderName)}</div>` : ''}
+          ${esc(plaintext)}
+          <div class="chat-msg-time">${time}</div>
+        </div>`;
+      })).then(html => {
+        container.innerHTML = html.join('');
+        container.scrollTop = container.scrollHeight;
+      });
+    }
+  );
+};
+
+window.sendChatMsg = async function() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text) return;
+  if (isMessageBlocked(text)) { input.value = ''; return; }
+  if (activeChatIsGroup && activeGroupId) {
+    const payload = await groupEncrypt(activeGroupId, text);
+    await addDoc(collection(db,'groupChats',activeGroupId,'messages'),{
+      from: currentUser.uid, senderName: userProfile.username, ...payload, ts: serverTimestamp()
+    });
+  } else if (activeChatFriendId) {
+    const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
+    const payload = await e2eEncrypt(activeChatFriendId, text);
+    await addDoc(collection(db,'chats',chatId,'messages'),{
+      from: currentUser.uid, ...payload, ts: serverTimestamp()
+    });
+  }
+  input.value = '';
+};
 
 // ── Screens ──
 function showScreen(name) {
@@ -891,6 +1162,7 @@ window.doLogout = async function() {
   await signOut(auth);
   // Nuke Firebase auth keys from localStorage so session won't restore on reload
   try {
+    _userKey = null;
     Object.keys(localStorage)
       .filter(k => k.startsWith('firebase:') || k.includes('firebaseLocalStorage') || k.startsWith('CryptoKey'))
       .forEach(k => localStorage.removeItem(k));
@@ -1151,7 +1423,8 @@ window.addTask = async function() {
   const date = document.getElementById('new-task-date').value;
   if (!name) { setNotice('add-notice','Task name required.','error'); return; }
   if (!date) { setNotice('add-notice','Due date required.','error'); return; }
-  await addDoc(collection(db,'users',currentUser.uid,'tasks'),{name,date});
+  const encName = await userEncrypt(name);
+  await addDoc(collection(db,'users',currentUser.uid,'tasks'),{name:encName,date});
   document.getElementById('new-task-name').value='';
   document.getElementById('new-task-date').value='';
   clearNotice('add-notice');
@@ -1172,7 +1445,8 @@ window.saveEdit = async function() {
   const date = document.getElementById('edit-date').value;
   if (!name) { setNotice('edit-notice','Name required.','error'); return; }
   if (!date) { setNotice('edit-notice','Date required.','error'); return; }
-  await updateDoc(doc(db,'users',currentUser.uid,'tasks',editingTaskId),{name,date});
+  const encName = await userEncrypt(name);
+  await updateDoc(doc(db,'users',currentUser.uid,'tasks',editingTaskId),{name:encName,date});
   closeEdit();
 };
 window.deleteTask = async function() {
@@ -1182,33 +1456,66 @@ window.deleteTask = async function() {
 };
 
 // ── Task Sharing ──
+window.switchShareTab = function(tab) {
+  const isFriend = tab === 'friend';
+  document.getElementById('share-friend-section').classList.toggle('hidden', !isFriend);
+  document.getElementById('share-group-section').classList.toggle('hidden', isFriend);
+  document.getElementById('share-tab-friend').style.cssText = isFriend
+    ? 'flex:1;padding:9px;font-size:12px;font-family:var(--font-ui);border:none;background:var(--accent);color:#0e0e11;font-weight:700;cursor:pointer'
+    : 'flex:1;padding:9px;font-size:12px;font-family:var(--font-ui);border:none;background:var(--surface2);color:var(--muted);cursor:pointer';
+  document.getElementById('share-tab-group').style.cssText = isFriend
+    ? 'flex:1;padding:9px;font-size:12px;font-family:var(--font-ui);border:none;background:var(--surface2);color:var(--muted);cursor:pointer'
+    : 'flex:1;padding:9px;font-size:12px;font-family:var(--font-ui);border:none;background:var(--accent);color:#0e0e11;font-weight:700;cursor:pointer';
+};
 window.openShareTask = function() {
   sharingTaskId = editingTaskId;
   closeEdit();
-  if (!friends.length) { alert('You have no friends yet! Add some first.'); return; }
+  if (!friends.length && !groups.length) { alert('You have no friends or groups yet!'); return; }
   const sel = document.getElementById('share-friend-select');
   sel.innerHTML = friends.map(f => {
     const friendUid = f.users.find(u=>u!==currentUser.uid);
     const name = f.usernames?.[friendUid] || friendUid;
     return `<option value="${friendUid}">${name}</option>`;
   }).join('');
+  const gsel = document.getElementById('share-group-select');
+  gsel.innerHTML = groups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+  switchShareTab('friend');
   clearNotice('share-notice');
   document.getElementById('share-overlay').classList.remove('hidden');
 };
 window.closeShareTask = function() { document.getElementById('share-overlay').classList.add('hidden'); };
 window.sendTaskShare = async function() {
-  const toUid = document.getElementById('share-friend-select').value;
+  const isGroup = !document.getElementById('share-group-section').classList.contains('hidden');
   const ids = Array.isArray(sharingTaskId) ? sharingTaskId : [sharingTaskId];
   const tasksToShare = ids.map(id => tasks.find(t=>t.id===id)).filter(Boolean);
   if (!tasksToShare.length) return;
-  await Promise.all(tasksToShare.map(task =>
-    addDoc(collection(db,'taskShares'),{
-      from: currentUser.uid, fromUsername: userProfile.username,
-      to: toUid, task: {name:task.name, date:task.date}, status:'pending', createdAt: serverTimestamp()
-    })
-  ));
-  const count = tasksToShare.length;
-  setNotice('share-notice', `✓ ${count} task${count>1?'s':''} shared!`, 'success');
+
+  if (isGroup) {
+    const groupId = document.getElementById('share-group-select').value;
+    const g = groups.find(g=>g.id===groupId);
+    if (!g) return;
+    // Send each task as a special chat message to the group
+    await Promise.all(tasksToShare.map(async task => {
+      const msgText = `📋 Task shared: "${task.name}"${task.date ? ` · due ${task.date}` : ''} [taskshare:${JSON.stringify({name:task.name,date:task.date||'',from:userProfile.username})}]`;
+      const payload = await groupEncrypt(groupId, msgText);
+      return addDoc(collection(db,'groupChats',groupId,'messages'),{
+        from: currentUser.uid, senderName: userProfile.username, ...payload,
+        type: 'taskshare', ts: serverTimestamp()
+      });
+    }));
+    const count = tasksToShare.length;
+    setNotice('share-notice', `✓ ${count} task${count>1?'s':''} shared to group!`, 'success');
+  } else {
+    const toUid = document.getElementById('share-friend-select').value;
+    await Promise.all(tasksToShare.map(task =>
+      addDoc(collection(db,'taskShares'),{
+        from: currentUser.uid, fromUsername: userProfile.username,
+        to: toUid, task: {name:task.name, date:task.date}, status:'pending', createdAt: serverTimestamp()
+      })
+    ));
+    const count = tasksToShare.length;
+    setNotice('share-notice', `✓ ${count} task${count>1?'s':''} shared!`, 'success');
+  }
   if (selectMode) { selectMode=false; selectedIds.clear(); }
   setTimeout(()=>closeShareTask(),1200);
 };
@@ -1219,7 +1526,8 @@ async function checkTaskShares() {
   snap.forEach(async d => {
     const share = d.data();
     if (confirm(`${share.fromUsername} shared a task with you: "${share.task.name}" (due ${share.task.date}). Add it to your tasks?`)) {
-      await addDoc(collection(db,'users',currentUser.uid,'tasks'),{...share.task, sharedFrom: share.fromUsername});
+      const encName = await userEncrypt(share.task.name);
+      await addDoc(collection(db,'users',currentUser.uid,'tasks'),{...share.task, name:encName, sharedFrom: share.fromUsername});
     }
     await updateDoc(doc(db,'taskShares',d.id),{status:'seen'});
   });
@@ -1234,8 +1542,10 @@ let stickyActiveIndex = {}; // stackId -> current index shown
 window.addStickyNote = async function() {
   const color = STICKY_COLORS[Math.floor(Math.random()*STICKY_COLORS.length)];
   const themed = userProfile?.stickyThemed || false;
+  const initTitle   = await userEncrypt('Note');
+  const initContent = await userEncrypt('');
   await addDoc(collection(db,'users',currentUser.uid,'stickies'),{
-    title: 'Note', content:'', color, themed,
+    title: initTitle, content: initContent, color, themed,
     x: 120+Math.random()*200, y: 80+Math.random()*150, w:230, h:170,
     stackId: null, stackOrder: 0,
   });
@@ -1427,14 +1737,23 @@ window.toggleStickyTheme = async function(id) {
 
 window.deleteStickyNote = async function(id) {
   const s = stickies.find(s=>s.id===id);
+  if (s) {
+    // Grab the raw encrypted Firestore data so we can restore it exactly
+    const snap = await getDoc(doc(db,'users',currentUser.uid,'stickies',id));
+    if (snap.exists()) _stickyUndoStack.push({ id, ...snap.data() });
+    if (_stickyUndoStack.length > 10) _stickyUndoStack.shift(); // cap stack
+  }
   if (s?.stackId) await unstackSticky(id);
   await deleteDoc(doc(db,'users',currentUser.uid,'stickies',id));
+  _showUndoToast();
 };
 window.saveStickyContent = async function(id, content) {
-  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{content});
+  const encContent = await userEncrypt(content);
+  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{content: encContent});
 };
 window.saveStickyTitle = async function(id, title) {
-  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{title: title||'Note'});
+  const encTitle = await userEncrypt(title||'Note');
+  await updateDoc(doc(db,'users',currentUser.uid,'stickies',id),{title: encTitle});
 };
 
 // ── Friends ──
@@ -1446,9 +1765,10 @@ window.openFriendsWindow = function() {
 window.closeFriendsWindow = function() { document.getElementById('friends-window').classList.add('hidden'); };
 
 window.switchFriendsTab = function(tab) {
-  ['friends','requests','add'].forEach(t => {
+  ['friends','groups','requests','add'].forEach(t => {
     document.getElementById(`tab-${t}`).classList.toggle('hidden', t!==tab);
   });
+  if (tab === 'groups') renderGroupsList();
 };
 
 window.searchFriend = async function() {
@@ -1539,6 +1859,8 @@ window.declineFriendReq = async function(reqId) {
 // ── Chat ──
 window.openChat = function(friendUid, friendName) {
   activeChatFriendId = friendUid;
+  activeChatIsGroup = false;
+  activeGroupId = null;
   document.getElementById('chat-title').textContent = `💬 ${friendName}`;
   document.getElementById('chat-window').classList.remove('hidden');
   unreadChats.delete(friendUid);
@@ -1606,6 +1928,8 @@ window.closeChatWindow = function() {
   document.getElementById('chat-window').classList.add('hidden');
   if (chatUnsub) { chatUnsub(); chatUnsub = null; }
   activeChatFriendId = null;
+  activeChatIsGroup = false;
+  activeGroupId = null;
 };
 // ── Chat Filter ──
 const BUILTIN_BLOCKED = [
@@ -1666,6 +1990,35 @@ async function getChatKey(uidA, uidB) {
 
 // Cache so we only derive once per conversation
 const _chatKeyCache = {};
+
+// ── Per-user key for tasks and sticky notes ──
+let _userKey = null;
+async function getUserKey(uid) {
+  if (_userKey) return _userKey;
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(uid), 'PBKDF2', false, ['deriveKey']);
+  _userKey = await crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: new TextEncoder().encode('taskr-user-v1'), iterations:100000, hash:'SHA-256' },
+    base, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+  return _userKey;
+}
+async function userEncrypt(plaintext) {
+  if (!currentUser) return { text: plaintext };
+  const key = await getUserKey(currentUser.uid);
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const enc = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
+  return { iv: _b64(iv.buffer), ct: _b64(enc) };
+}
+async function userDecrypt(field) {
+  if (!field) return '';
+  if (typeof field === 'string') return field; // legacy plain text
+  if (!field.ct) return field.text || '';      // legacy plain text object
+  if (!currentUser) return '🔒';
+  const key = await getUserKey(currentUser.uid);
+  try {
+    const dec = await crypto.subtle.decrypt({ name:'AES-GCM', iv: new Uint8Array(_ub64(field.iv)) }, key, _ub64(field.ct));
+    return new TextDecoder().decode(dec);
+  } catch(_) { return '🔒 could not decrypt'; }
+}
 async function getOrDeriveChatKey(friendUid) {
   if (_chatKeyCache[friendUid]) return _chatKeyCache[friendUid];
   const key = await getChatKey(currentUser.uid, friendUid);
@@ -1690,20 +2043,18 @@ async function e2eDecrypt(friendUid, msg) {
 }
 
 
-window.sendChatMsg = async function() {
-  const input = document.getElementById('chat-input');
-  const text  = input.value.trim();
-  if (!text || !activeChatFriendId) return;
-  if (isMessageBlocked(text)) {
-    input.value = '';
-    return; // silently block
-  }
-  const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
-  const payload = await e2eEncrypt(activeChatFriendId, text);
-  await addDoc(collection(db,'chats',chatId,'messages'),{
-    from: currentUser.uid, ...payload, ts: serverTimestamp()
+window.addSharedGroupTask = async function(taskData) {
+  if (!taskData?.name) return;
+  const encName = await userEncrypt(taskData.name);
+  await addDoc(collection(db,'users',currentUser.uid,'tasks'),{
+    name: encName, date: taskData.date||'', sharedFrom: taskData.from||'group'
   });
-  input.value = '';
+  // Show brief toast
+  let t = document.getElementById('undo-toast');
+  if (!t) { t = document.createElement('div'); t.id='undo-toast'; document.body.appendChild(t); }
+  t.innerHTML = `<span>✓ Task added to your list!</span>`;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
 };
 
 // ── Opacity ──
@@ -2157,7 +2508,40 @@ document.addEventListener('keydown',e=>{
     if(!document.getElementById('view-signup').classList.contains('hidden'))doSignup();
     if(!document.getElementById('edit-overlay').classList.contains('hidden'))saveEdit();
   }
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'&&_stickyUndoStack.length){
+    const active = document.activeElement;
+    const isTyping = active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA');
+    if(!isTyping){e.preventDefault();undoDeleteSticky();}
+  }
 });
+// ── Sticky Note Undo ──
+const _stickyUndoStack = [];
+let _undoToastTimer = null;
+
+function _showUndoToast() {
+  let toast = document.getElementById('undo-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'undo-toast';
+    toast.innerHTML = `<span>Sticky note deleted</span><button onclick="undoDeleteSticky()">Undo (Ctrl+Z)</button>`;
+    document.body.appendChild(toast);
+  }
+  toast.classList.add('show');
+  if (_undoToastTimer) clearTimeout(_undoToastTimer);
+  _undoToastTimer = setTimeout(() => toast.classList.remove('show'), 5000);
+}
+
+window.undoDeleteSticky = async function() {
+  if (!_stickyUndoStack.length) return;
+  const note = _stickyUndoStack.pop();
+  const toast = document.getElementById('undo-toast');
+  if (toast) toast.classList.remove('show');
+  if (_undoToastTimer) clearTimeout(_undoToastTimer);
+  // Re-create the note in Firebase with its original data (already encrypted)
+  const { id, ...data } = note;
+  await setDoc(doc(db,'users',currentUser.uid,'stickies', id), data);
+};
+
 ['edit-overlay','logout-overlay','settings-overlay','customize-overlay','share-overlay'].forEach(id=>{
   const el=document.getElementById(id);
   if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.add('hidden');});
