@@ -622,7 +622,6 @@ select { cursor:pointer; }
       <span class="window-title" style="flex:1;min-width:0">👥 Friends</span>
       <div class="window-controls" style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="win-btn" onclick="switchFriendsTab('friends')">Friends</button>
-        <button class="win-btn" onclick="switchFriendsTab('groups')">Groups <span id="group-notif-count"></span></button>
         <button class="win-btn" onclick="switchFriendsTab('requests')">Requests <span id="req-count"></span></button>
         <button class="win-btn" onclick="switchFriendsTab('add')">＋ Add</button>
         <button class="win-btn" onclick="closeFriendsWindow()">✕</button>
@@ -630,16 +629,6 @@ select { cursor:pointer; }
     </div>
     <!-- Friends list tab -->
     <div id="tab-friends" class="window-body"></div>
-    <!-- Groups tab -->
-    <div id="tab-groups" class="window-body hidden">
-      <div id="groups-list"></div>
-      <hr class="divider" style="margin:10px 0">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Create Group</div>
-      <input type="text" id="new-group-name" placeholder="Group name…" style="margin-bottom:8px;font-size:13px">
-      <div id="group-member-checkboxes" style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto"></div>
-      <button class="btn-accent-sm" style="width:100%" onclick="createGroup()">Create Group Chat</button>
-      <div id="group-create-notice" style="margin-top:8px;font-size:12px"></div>
-    </div>
     <!-- Requests tab -->
     <div id="tab-requests" class="window-body hidden"></div>
     <!-- Add friend tab -->
@@ -657,9 +646,16 @@ select { cursor:pointer; }
     <div class="window-header" id="chat-header" style="flex-wrap:wrap;gap:6px;padding:10px 12px">
       <span class="window-title" id="chat-title" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">💬 Chat</span>
       <div class="window-controls" style="display:flex;gap:4px;flex-shrink:0">
+        <button class="win-btn" id="chat-invite-btn" onclick="toggleInvitePanel()" title="Invite to group" style="padding:3px 9px;font-size:14px;font-weight:700;display:none">＋</button>
         <button class="win-btn" onclick="clearChat()" title="Clear chat history" style="padding:3px 7px;font-size:12px">🗑</button>
         <button class="win-btn" onclick="closeChatWindow()" style="padding:3px 7px;font-size:12px">✕</button>
       </div>
+    </div>
+    <!-- Invite panel (slides in below header) -->
+    <div id="chat-invite-panel" style="display:none;background:var(--surface2);border-bottom:1px solid var(--border);padding:10px 12px;flex-shrink:0">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Invite to chat</div>
+      <div id="invite-friends-list" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto"></div>
+      <div id="invite-notice" style="margin-top:6px;font-size:11px"></div>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <div id="chat-notice" style="padding:0 12px;font-size:11px"></div>
@@ -925,66 +921,38 @@ function updateFriendBadge() {
 }
 
 function renderGroupsList() {
-  const el = document.getElementById('groups-list');
-  if (!el) return;
-  // Populate member checkboxes for create form
-  const cbContainer = document.getElementById('group-member-checkboxes');
-  if (cbContainer) {
-    cbContainer.innerHTML = friends.map(f => {
-      const fUid = f.users.find(u=>u!==currentUser.uid);
-      const fName = f.usernames?.[fUid] || (f.from===currentUser.uid?f.toUsername:f.fromUsername);
-      return `<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
-        <input type="checkbox" value="${fUid}" data-name="${esc(fName)}" style="accent-color:var(--accent);width:14px;height:14px">
-        ${esc(fName)}
-      </label>`;
-    }).join('');
+  // Groups are rendered at the bottom of the friends tab
+  let el = document.getElementById('groups-in-friends');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'groups-in-friends';
+    const friendsTab = document.getElementById('tab-friends');
+    if (friendsTab) friendsTab.appendChild(el);
   }
-  // Update group unread badge count
-  const badge = document.getElementById('group-notif-count');
-  if (badge) badge.textContent = unreadGroups.size > 0 ? `(${unreadGroups.size})` : '';
 
-  if (!groups.length) {
-    el.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:8px 0 12px">No groups yet — create one below.</div>`;
-    return;
-  }
-  el.innerHTML = groups.map(g => {
+  // Update group unread badge count on friend-notif button
+  updateFriendBadge();
+
+  if (!groups.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px;padding-top:8px;border-top:1px solid var(--border)">Group Chats</div>` +
+  groups.map(g => {
     const hasUnread = unreadGroups.has(g.id);
     const memberCount = g.members?.length || 0;
-    return `<div class="friend-item" style="flex-direction:column;align-items:flex-start;gap:6px">
-      <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
-        <div>
-          <div class="friend-name">👥 ${esc(g.name)} ${hasUnread?'<span style="color:var(--accent);font-size:11px">● new</span>':''}</div>
-          <div class="friend-status">${memberCount} member${memberCount!==1?'s':''}</div>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn-accent-sm" onclick="openGroupChat('${g.id}','${esc(g.name)}')">💬${hasUnread?'🔴':''}</button>
-          ${g.createdBy===currentUser.uid
-            ? `<button class="win-btn" style="color:var(--danger)" onclick="deleteGroup('${g.id}','${esc(g.name)}')">Delete</button>`
-            : `<button class="win-btn" onclick="leaveGroup('${g.id}','${esc(g.name)}')">Leave</button>`}
-        </div>
+    return `<div class="friend-item">
+      <div style="flex:1;min-width:0">
+        <div class="friend-name">👥 ${esc(g.name)} ${hasUnread?'<span style="color:var(--accent);font-size:11px">● new</span>':''}</div>
+        <div class="friend-status">${memberCount} member${memberCount!==1?'s':''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn-accent-sm" onclick="openGroupChat('${g.id}','${esc(g.name)}')">💬${hasUnread?'🔴':''}</button>
+        ${g.createdBy===currentUser.uid
+          ? `<button class="win-btn" style="color:var(--danger);font-size:11px" onclick="deleteGroup('${g.id}','${esc(g.name)}')">Del</button>`
+          : `<button class="win-btn" style="font-size:11px" onclick="leaveGroup('${g.id}','${esc(g.name)}')">Leave</button>`}
       </div>
     </div>`;
   }).join('');
 }
-
-window.createGroup = async function() {
-  const name = document.getElementById('new-group-name').value.trim();
-  const notice = document.getElementById('group-create-notice');
-  if (!name) { notice.innerHTML = '<span style="color:var(--danger)">Enter a group name.</span>'; return; }
-  const checked = [...document.querySelectorAll('#group-member-checkboxes input:checked')];
-  if (!checked.length) { notice.innerHTML = '<span style="color:var(--danger)">Select at least one friend.</span>'; return; }
-  const memberUids = [currentUser.uid, ...checked.map(c=>c.value)];
-  const memberNames = { [currentUser.uid]: userProfile.username };
-  checked.forEach(c => { memberNames[c.value] = c.dataset.name; });
-  await addDoc(collection(db,'groupChats'),{
-    name, members: memberUids, memberNames,
-    createdBy: currentUser.uid, createdAt: serverTimestamp()
-  });
-  document.getElementById('new-group-name').value = '';
-  checked.forEach(c => c.checked = false);
-  notice.innerHTML = `<span style="color:var(--accent)">✓ Group "${esc(name)}" created!</span>`;
-  setTimeout(() => { if (notice) notice.innerHTML = ''; }, 2500);
-};
 
 window.leaveGroup = async function(groupId, name) {
   if (!confirm(`Leave "${name}"?`)) return;
@@ -1045,6 +1013,8 @@ window.openGroupChat = function(groupId, groupName) {
   renderGroupsList();
   document.getElementById('chat-title').textContent = `👥 ${groupName}`;
   document.getElementById('chat-window').classList.remove('hidden');
+  document.getElementById('chat-invite-btn').style.display = '';
+  _closeInvitePanel();
   if (chatUnsub) { chatUnsub(); chatUnsub = null; }
   chatUnsub = onSnapshot(
     query(collection(db,'groupChats',groupId,'messages'), orderBy('ts')),
@@ -1765,10 +1735,9 @@ window.openFriendsWindow = function() {
 window.closeFriendsWindow = function() { document.getElementById('friends-window').classList.add('hidden'); };
 
 window.switchFriendsTab = function(tab) {
-  ['friends','groups','requests','add'].forEach(t => {
+  ['friends','requests','add'].forEach(t => {
     document.getElementById(`tab-${t}`).classList.toggle('hidden', t!==tab);
   });
-  if (tab === 'groups') renderGroupsList();
 };
 
 window.searchFriend = async function() {
@@ -1817,6 +1786,7 @@ function renderFriendsList() {
       </div>
     </div>`;
   }).join('');
+  renderGroupsList();
 }
 
 window.removeFriend = async function(friendDocId, name) {
@@ -1863,6 +1833,8 @@ window.openChat = function(friendUid, friendName) {
   activeGroupId = null;
   document.getElementById('chat-title').textContent = `💬 ${friendName}`;
   document.getElementById('chat-window').classList.remove('hidden');
+  document.getElementById('chat-invite-btn').style.display = '';
+  _closeInvitePanel();
   unreadChats.delete(friendUid);
   renderFriendsList();
   // Build chat ID (sorted so both users get same ID)
@@ -1926,10 +1898,110 @@ async function maybeAutoCleanChat(chatId) {
 
 window.closeChatWindow = function() {
   document.getElementById('chat-window').classList.add('hidden');
+  document.getElementById('chat-invite-btn').style.display = 'none';
+  _closeInvitePanel();
   if (chatUnsub) { chatUnsub(); chatUnsub = null; }
   activeChatFriendId = null;
   activeChatIsGroup = false;
   activeGroupId = null;
+};
+
+// ── Invite Panel ──
+function _closeInvitePanel() {
+  const p = document.getElementById('chat-invite-panel');
+  if (p) p.style.display = 'none';
+}
+
+window.toggleInvitePanel = function() {
+  const p = document.getElementById('chat-invite-panel');
+  if (p.style.display === 'none' || !p.style.display) {
+    _renderInvitePanel();
+    p.style.display = 'block';
+  } else {
+    p.style.display = 'none';
+  }
+};
+
+function _renderInvitePanel() {
+  const el = document.getElementById('invite-friends-list');
+  const notice = document.getElementById('invite-notice');
+  notice.innerHTML = '';
+
+  // Who's already in this chat?
+  let alreadyIn = new Set();
+  if (activeChatIsGroup && activeGroupId) {
+    const g = groups.find(g=>g.id===activeGroupId);
+    if (g) g.members.forEach(m => alreadyIn.add(m));
+  } else if (activeChatFriendId) {
+    alreadyIn.add(currentUser.uid);
+    alreadyIn.add(activeChatFriendId);
+  }
+
+  const invitable = friends.filter(f => {
+    const fUid = f.users.find(u=>u!==currentUser.uid);
+    return !alreadyIn.has(fUid);
+  });
+
+  if (!invitable.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:12px">All friends are already in this chat.</div>`;
+    return;
+  }
+
+  el.innerHTML = invitable.map(f => {
+    const fUid = f.users.find(u=>u!==currentUser.uid);
+    const fName = f.usernames?.[fUid] || (f.from===currentUser.uid?f.toUsername:f.fromUsername);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
+      <span style="font-size:12px;color:var(--text)">${esc(fName)}</span>
+      <button class="btn-accent-sm" style="font-size:11px;padding:4px 10px" onclick="inviteToChat('${fUid}','${esc(fName)}')">Invite</button>
+    </div>`;
+  }).join('');
+}
+
+window.inviteToChat = async function(friendUid, friendName) {
+  const notice = document.getElementById('invite-notice');
+  notice.innerHTML = '<span style="color:var(--muted)">Inviting…</span>';
+
+  if (activeChatIsGroup && activeGroupId) {
+    // Add to existing group
+    const g = groups.find(g=>g.id===activeGroupId);
+    if (!g) return;
+    const newMembers = [...g.members, friendUid];
+    const newNames = { ...(g.memberNames||{}), [friendUid]: friendName };
+    await updateDoc(doc(db,'groupChats',activeGroupId), { members: newMembers, memberNames: newNames });
+    // Post a system-style message
+    const payload = await groupEncrypt(activeGroupId, `${friendName} was added to the group.`);
+    await addDoc(collection(db,'groupChats',activeGroupId,'messages'),{
+      from: currentUser.uid, senderName: userProfile.username, ...payload,
+      type: 'system', ts: serverTimestamp()
+    });
+    notice.innerHTML = `<span style="color:var(--accent)">✓ ${esc(friendName)} added!</span>`;
+  } else if (activeChatFriendId) {
+    // Upgrade 1:1 DM → new group chat with all three
+    const dmFriendName = document.getElementById('chat-title').textContent.replace('💬 ','').trim();
+    const groupName = `${userProfile.username}, ${dmFriendName}, ${friendName}`;
+    const memberUids = [currentUser.uid, activeChatFriendId, friendUid];
+    const memberNames = {
+      [currentUser.uid]: userProfile.username,
+      [activeChatFriendId]: dmFriendName,
+      [friendUid]: friendName
+    };
+    const ref = await addDoc(collection(db,'groupChats'),{
+      name: groupName, members: memberUids, memberNames,
+      createdBy: currentUser.uid, createdAt: serverTimestamp()
+    });
+    // Post welcome message
+    const payload = await groupEncrypt(ref.id, `${userProfile.username} created a group with ${dmFriendName} and ${friendName}.`);
+    await addDoc(collection(db,'groupChats',ref.id,'messages'),{
+      from: currentUser.uid, senderName: userProfile.username, ...payload,
+      type: 'system', ts: serverTimestamp()
+    });
+    notice.innerHTML = `<span style="color:var(--accent)">✓ Group created!</span>`;
+    // Switch to the new group chat
+    setTimeout(() => { _closeInvitePanel(); openGroupChat(ref.id, groupName); }, 800);
+    return;
+  }
+
+  setTimeout(() => { notice.innerHTML = ''; _renderInvitePanel(); }, 1500);
 };
 // ── Chat Filter ──
 const BUILTIN_BLOCKED = [
