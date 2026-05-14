@@ -250,6 +250,35 @@ select { cursor:pointer; }
   align-items: center; justify-content: center; transition: all .18s;
 }
 .side-panel-toggle:hover { color: var(--text); border-color: var(--muted); }
+
+/* ── Patch Note Sticky ── */
+.sticky-note.patch-note {
+  background: rgba(18, 14, 6, 0.97) !important;
+  border: 1px solid rgba(212, 175, 55, 0.5) !important;
+  box-shadow: 0 8px 32px rgba(212,175,55,0.15), 0 2px 8px rgba(0,0,0,0.6) !important;
+}
+.patch-note .sticky-title-input {
+  color: #d4af37 !important;
+  font-family: 'Playfair Display', serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.05em;
+}
+.patch-note .sticky-body {
+  color: #e8d98a !important;
+  font-family: 'DM Mono', monospace !important;
+  font-weight: 300 !important;
+  line-height: 1.7 !important;
+}
+.patch-note .sticky-header {
+  border-bottom-color: rgba(212,175,55,0.2) !important;
+}
+.patch-note .sticky-btn {
+  background: rgba(212,175,55,0.12) !important;
+  color: #d4af37 !important;
+}
+.patch-note .sticky-btn:hover { background: rgba(212,175,55,0.22) !important; }
+.patch-note .sticky-footer { border-top-color: rgba(212,175,55,0.15) !important; }
+.patch-note .sticky-resize { background: rgba(212,175,55,0.2) !important; }
 </style>
 </head>
 <body>
@@ -614,6 +643,21 @@ select { cursor:pointer; }
       </div>
       <div id="filter-notice" style="margin-top:8px"></div>
     </div>
+
+    <div class="section-box" style="margin-top:12px">
+      <div class="section-title">⑤ Patch Notes Sticky</div>
+      <div style="color:var(--muted);font-size:11px;margin-bottom:12px;line-height:1.6">
+        Write patch notes and publish them — a gold sticky will appear on every user's screen. Users can move or delete it like any sticky note.
+      </div>
+      <label>Content</label>
+      <textarea id="patch-note-content" rows="6" placeholder="e.g. v1.2 — Added group chats, fixed sticky drag..." style="margin-bottom:8px;font-size:12px;font-family:'DM Mono',monospace"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" style="flex:1" onclick="publishPatchNote()">📣 Publish to Everyone</button>
+        <button class="btn btn-ghost btn-sm" onclick="unpublishPatchNote()">Unpublish</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadCurrentPatchNote()">Load Current</button>
+      </div>
+      <div id="patch-notice" style="margin-top:8px"></div>
+    </div>
   </div>
 
   <!-- Friends Window (draggable) -->
@@ -684,6 +728,7 @@ let groups        = [];
 let groupInvites  = [];
 let groupUnsub    = null;
 let groupInvitesUnsub = null;
+let patchNoteUnsub    = null;
 let groupChatUnsubs = {};
 let unreadGroups  = new Set();
 let editingTaskId = null;
@@ -719,6 +764,7 @@ onAuthStateChanged(auth, async user => {
     subscribeToRequests(user.uid);
     subscribeToGroups(user.uid);
     subscribeToGroupInvites(user.uid);
+    subscribeToPatchNote();
     loadBlockedWords(); // fire-and-forget, non-admin gets denied fast
     showScreen('dash');
     initPanelSide();
@@ -734,10 +780,10 @@ onAuthStateChanged(auth, async user => {
     Object.keys(_chatWindows).forEach(k => closeChatWindow(k));
 
     // Unsubscribe all listeners
-    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, groupUnsub, groupInvitesUnsub].forEach(u => u && u());
+    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, groupUnsub, groupInvitesUnsub, patchNoteUnsub].forEach(u => u && u());
     chatNotifUnsubs.forEach(u => u()); chatNotifUnsubs = [];
     Object.values(groupChatUnsubs).forEach(u => u && u()); groupChatUnsubs = {};
-    tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = groupUnsub = groupInvitesUnsub = null;
+    tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = groupUnsub = groupInvitesUnsub = patchNoteUnsub = null;
 
     // Close every floating window and the side panel
     // Close all open chat windows
@@ -865,6 +911,91 @@ function subscribeToGroupInvites(uid) {
     }
   );
 }
+
+// ── Patch Note ──
+function subscribeToPatchNote() {
+  if (patchNoteUnsub) patchNoteUnsub();
+  patchNoteUnsub = onSnapshot(doc(db, 'admin', 'patchNote'), async snap => {
+    // Remove any existing patch note sticky from the canvas
+    const existing = document.getElementById('sticky-patch-note');
+    if (existing) existing.remove();
+
+    if (!snap.exists() || !snap.data().active) return;
+    const data = snap.data();
+    const content = data.content || '';
+    const publishedAt = data.createdAt?.toMillis?.() || 0;
+
+    // Check if this user already dismissed this version
+    const dismissed = userProfile?.dismissedPatchNote || 0;
+    if (dismissed >= publishedAt) return;
+
+    renderPatchNote(content);
+  });
+}
+
+function renderPatchNote(content) {
+  const existing = document.getElementById('sticky-patch-note');
+  if (existing) existing.remove();
+
+  const container = document.getElementById('sticky-container');
+  const el = document.createElement('div');
+  el.className = 'sticky-note patch-note';
+  el.id = 'sticky-patch-note';
+  el.style.cssText = 'left:160px;top:60px;width:280px;height:220px;z-index:155';
+  el.innerHTML = `
+    <div class="sticky-header" style="cursor:move">
+      <input class="sticky-title-input" value="Patch Notes" readonly
+        style="pointer-events:none">
+      <div class="sticky-actions">
+        <button class="sticky-btn" onclick="dismissPatchNote()" title="Dismiss">✕</button>
+      </div>
+    </div>
+    <textarea class="sticky-body" placeholder=""
+      onmousedown="event.stopPropagation()">${esc(content)}</textarea>
+    <div class="sticky-footer"></div>
+    <div class="sticky-resize"></div>`;
+
+  container.appendChild(el);
+  makeDraggable(el, el.querySelector('.sticky-header'), 'patch-note', 'sticky-pn');
+  makeResizable(el, el.querySelector('.sticky-resize'), 'patch-note', 'sticky-pn');
+}
+
+window.dismissPatchNote = async function() {
+  const el = document.getElementById('sticky-patch-note');
+  if (el) el.remove();
+  // Store dismissal timestamp so it doesn't reappear unless a new patch note is published
+  const snap = await getDoc(doc(db, 'admin', 'patchNote'));
+  if (!snap.exists()) return;
+  const publishedAt = snap.data().createdAt?.toMillis?.() || Date.now();
+  await saveProfile({ dismissedPatchNote: publishedAt });
+};
+
+// ── Admin: Patch Note functions ──
+window.publishPatchNote = async function() {
+  const content = document.getElementById('patch-note-content').value.trim();
+  if (!content) { setNotice('patch-notice','Enter some content first.','error'); return; }
+  await setDoc(doc(db,'admin','patchNote'),{
+    content, active: true, createdAt: serverTimestamp()
+  });
+  setNotice('patch-notice','✓ Published! All users will see it on next load.','success');
+  setTimeout(()=>clearNotice('patch-notice'),3000);
+};
+
+window.unpublishPatchNote = async function() {
+  await setDoc(doc(db,'admin','patchNote'),{ active: false },{ merge: true });
+  setNotice('patch-notice','Patch note hidden from all users.','info');
+  setTimeout(()=>clearNotice('patch-notice'),3000);
+};
+
+window.loadCurrentPatchNote = async function() {
+  const snap = await getDoc(doc(db,'admin','patchNote'));
+  if (!snap.exists() || !snap.data().content) {
+    setNotice('patch-notice','No patch note published yet.','info');
+    return;
+  }
+  document.getElementById('patch-note-content').value = snap.data().content;
+  clearNotice('patch-notice');
+};
 
 // ── Groups ──
 function subscribeToGroups(uid) {
