@@ -630,6 +630,7 @@ select { cursor:pointer; }
       </div>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
+    <div id="chat-notice" style="padding:0 12px;font-size:11px"></div>
     <div class="chat-input-row">
       <input type="text" class="chat-input" id="chat-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendChatMsg()">
       <button class="btn-accent-sm" onclick="sendChatMsg()">Send</button>
@@ -1762,7 +1763,7 @@ async function getSharedKey(friendUid) {
 
 async function e2eEncrypt(friendUid, plaintext) {
   const key = await getSharedKey(friendUid);
-  if (!key) return { text: plaintext };
+  if (!key) throw new Error('NO_KEY');
   const iv  = crypto.getRandomValues(new Uint8Array(12));
   const enc = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
   return { iv: _b64(iv.buffer), ct: _b64(enc) };
@@ -1788,7 +1789,19 @@ window.sendChatMsg = async function() {
     return; // silently block
   }
   const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
-  const payload = await e2eEncrypt(activeChatFriendId, text);
+  let payload;
+  try {
+    payload = await e2eEncrypt(activeChatFriendId, text);
+  } catch(e) {
+    if (e.message === 'NO_KEY') {
+      // Friend hasn't set up their encryption key yet — show why
+      const myKeyReady = _myPrivateKey !== null;
+      setNotice('chat-notice', myKeyReady
+        ? '🔒 Waiting for friend to log in once to set up encryption.'
+        : '🔒 Encryption not ready — please log out and back in.', 'error');
+    }
+    return;
+  }
   await addDoc(collection(db,'chats',chatId,'messages'),{
     from: currentUser.uid, ...payload, ts: serverTimestamp()
   });
