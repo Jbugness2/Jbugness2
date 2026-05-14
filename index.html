@@ -1757,10 +1757,11 @@ function _buildChatWindow(key, title, isGroup, friendUid, groupId) {
   const pos = _nextWindowPos();
   const el = document.createElement('div');
   el.className = 'draggable-window';
-  el.id = `cw-${key.replace(':','-')}`;
+  const safeKey = key.replace(':','-');
+  el.id = `cw-${safeKey}`;
   el.style.cssText = `width:300px;height:400px;bottom:${pos.bottom}px;right:${pos.right}px;top:auto;z-index:${_topZ()}`;
   el.innerHTML = `
-    <div class="window-header" id="ch-${key}" style="flex-wrap:wrap;gap:6px;padding:10px 12px;cursor:move">
+    <div class="window-header" id="ch-${safeKey}" style="flex-wrap:wrap;gap:6px;padding:10px 12px;cursor:move">
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;color:var(--text)">${esc(title)}</span>
       <div style="display:flex;gap:4px;flex-shrink:0">
         <button class="win-btn" onclick="toggleInvitePanel('${key}')" title="Invite to group" style="padding:3px 9px;font-size:14px;font-weight:700">＋</button>
@@ -1768,19 +1769,19 @@ function _buildChatWindow(key, title, isGroup, friendUid, groupId) {
         <button class="win-btn" onclick="closeChatWindow('${key}')" style="padding:3px 7px;font-size:12px">✕</button>
       </div>
     </div>
-    <div id="cw-invite-${key}" style="display:none;background:var(--surface2);border-bottom:1px solid var(--border);padding:10px 12px;flex-shrink:0">
+    <div id="cw-invite-${safeKey}" style="display:none;background:var(--surface2);border-bottom:1px solid var(--border);padding:10px 12px;flex-shrink:0">
       <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Invite to chat</div>
-      <div id="cw-ilist-${key}" style="display:flex;flex-direction:column;gap:6px;max-height:130px;overflow-y:auto"></div>
-      <div id="cw-inotice-${key}" style="margin-top:6px;font-size:11px"></div>
+      <div id="cw-ilist-${safeKey}" style="display:flex;flex-direction:column;gap:6px;max-height:130px;overflow-y:auto"></div>
+      <div id="cw-inotice-${safeKey}" style="margin-top:6px;font-size:11px"></div>
     </div>
-    <div class="chat-messages" id="cw-msgs-${key}"></div>
-    <div id="cw-notice-${key}" style="padding:0 12px;font-size:11px"></div>
+    <div class="chat-messages" id="cw-msgs-${safeKey}"></div>
+    <div id="cw-notice-${safeKey}" style="padding:0 12px;font-size:11px"></div>
     <div class="chat-input-row">
-      <input type="text" class="chat-input" id="cw-input-${key}" placeholder="Type a message…"
+      <input type="text" class="chat-input" id="cw-input-${safeKey}" placeholder="Type a message…"
         onkeydown="if(event.key==='Enter')sendChatMsg('${key}')">
       <button class="btn-accent-sm" onclick="sendChatMsg('${key}')">Send</button>
     </div>
-    <div class="window-resize" id="cwr-${key}"></div>`;
+    <div class="window-resize" id="cwr-${safeKey}"></div>`;
 
   document.getElementById('chat-windows-container').appendChild(el);
 
@@ -1789,7 +1790,7 @@ function _buildChatWindow(key, title, isGroup, friendUid, groupId) {
 
   // Wire draggable + resizable using existing helpers
   makeDraggable(el, el.querySelector('.window-header'), key, 'chat');
-  makeResizable(el, el.querySelector(`#cwr-${key}`), key, 'chat');
+  makeResizable(el, el.querySelector(`#cwr-${safeKey}`), key, 'chat');
 
   _chatWindows[key] = { el, unsub: null, isGroup, friendUid, groupId };
   return el;
@@ -1806,11 +1807,12 @@ window.openChat = function(friendUid, friendName) {
   const chatId = [currentUser.uid, friendUid].sort().join('_');
   maybeAutoCleanChat(chatId);
   if (_chatWindows[key].unsub) return; // already subscribed
+  const safeKeyDm = key.replace(':','-');
   _chatWindows[key].unsub = onSnapshot(
     query(collection(db,'chats',chatId,'messages'), orderBy('ts')),
     snap => {
       const msgs = snap.docs.map(d=>({id:d.id,...d.data()}));
-      const container = document.getElementById(`cw-msgs-${key}`);
+      const container = document.getElementById(`cw-msgs-${safeKeyDm}`);
       if (!container) return;
       Promise.all(msgs.map(async m => {
         const otherUid = m.from === currentUser.uid ? friendUid : m.from;
@@ -1834,11 +1836,12 @@ window.openGroupChat = function(groupId, groupName) {
   renderGroupsList();
   if (_chatWindows[key].unsub) return;
   const g = groups.find(g=>g.id===groupId);
+  const safeKeyGc = key.replace(':','-');
   _chatWindows[key].unsub = onSnapshot(
     query(collection(db,'groupChats',groupId,'messages'), orderBy('ts')),
     snap => {
       const msgs = snap.docs.map(d=>({id:d.id,...d.data()}));
-      const container = document.getElementById(`cw-msgs-${key}`);
+      const container = document.getElementById(`cw-msgs-${safeKeyGc}`);
       if (!container) return;
       Promise.all(msgs.map(async m => {
         const plaintext = await groupDecrypt(groupId, m);
@@ -1890,7 +1893,8 @@ window.clearChat = async function(key) {
 };
 
 window.sendChatMsg = async function(key) {
-  const input = document.getElementById(`cw-input-${key}`);
+  const safeKey = key.replace(':','-');
+  const input = document.getElementById(`cw-input-${safeKey}`);
   if (!input) return;
   const text = input.value.trim();
   if (!text) return;
@@ -1914,7 +1918,8 @@ window.sendChatMsg = async function(key) {
 
 // ── Invite Panel (per-window) ──
 window.toggleInvitePanel = function(key) {
-  const panel = document.getElementById(`cw-invite-${key}`);
+  const safeKey = key.replace(':','-');
+  const panel = document.getElementById(`cw-invite-${safeKey}`);
   if (!panel) return;
   if (panel.style.display === 'none' || !panel.style.display) {
     _renderInvitePanel(key);
@@ -1925,8 +1930,9 @@ window.toggleInvitePanel = function(key) {
 };
 
 function _renderInvitePanel(key) {
-  const el = document.getElementById(`cw-ilist-${key}`);
-  const notice = document.getElementById(`cw-inotice-${key}`);
+  const safeKey = key.replace(':','-');
+  const el = document.getElementById(`cw-ilist-${safeKey}`);
+  const notice = document.getElementById(`cw-inotice-${safeKey}`);
   if (!el || !notice) return;
   notice.innerHTML = '';
   const w = _chatWindows[key];
@@ -1954,7 +1960,8 @@ function _renderInvitePanel(key) {
 }
 
 window.inviteToChat = async function(key, friendUid, friendName) {
-  const notice = document.getElementById(`cw-inotice-${key}`);
+  const safeKey = key.replace(':','-');
+  const notice = document.getElementById(`cw-inotice-${safeKey}`);
   if (notice) notice.innerHTML = '<span style="color:var(--muted)">Inviting…</span>';
   const w = _chatWindows[key];
   if (!w) return;
@@ -2390,11 +2397,13 @@ function makeDraggable(el, handle, id, type) {
     if (e.target.tagName==='INPUT' && !e.target.hasAttribute('readonly')) return;
     e.preventDefault();
     if (e.target.tagName==='INPUT') { e.target.blur(); }
-    sx=e.clientX-el.offsetLeft; sy=e.clientY-el.offsetTop;
+    const rect = el.getBoundingClientRect();
+    sx=e.clientX-rect.left; sy=e.clientY-rect.top;
 
     const onMove = e => {
       ex=e.clientX-sx; ey=e.clientY-sy;
       el.style.left=ex+'px'; el.style.top=ey+'px';
+      if (type==='chat') { el.style.right='auto'; el.style.bottom='auto'; }
 
       if (type==='sticky') {
         // highlight any target sticky header we're hovering over
