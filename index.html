@@ -650,7 +650,7 @@ select { cursor:pointer; }
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, where, orderBy, getDocs, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, where, orderBy, getDocs, serverTimestamp, writeBatch, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC1VIWuWwiOIPNTdzLyK5Ge8Q_QboZfjAU",
@@ -681,7 +681,9 @@ let stickies      = [];
 let friends       = [];
 let friendRequests = [];
 let groups        = [];
+let groupInvites  = [];
 let groupUnsub    = null;
+let groupInvitesUnsub = null;
 let groupChatUnsubs = {};
 let unreadGroups  = new Set();
 let editingTaskId = null;
@@ -716,6 +718,7 @@ onAuthStateChanged(auth, async user => {
     subscribeToFriends(user.uid);
     subscribeToRequests(user.uid);
     subscribeToGroups(user.uid);
+    subscribeToGroupInvites(user.uid);
     loadBlockedWords(); // fire-and-forget, non-admin gets denied fast
     showScreen('dash');
     initPanelSide();
@@ -724,17 +727,17 @@ onAuthStateChanged(auth, async user => {
     maybeAutoEmail();
   } else if (!user || _didLogOut) {
     currentUser = null; userProfile = null; tasks = []; stickies = [];
-    friends = []; friendRequests = []; groups = []; selectedIds.clear(); selectMode = false;
+    friends = []; friendRequests = []; groups = []; groupInvites = []; selectedIds.clear(); selectMode = false;
     unreadChats.clear(); unreadGroups.clear();
 
     // Close all open chat windows
     Object.keys(_chatWindows).forEach(k => closeChatWindow(k));
 
     // Unsubscribe all listeners
-    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, groupUnsub].forEach(u => u && u());
+    [tasksUnsub, stickiesUnsub, friendsUnsub, reqUnsub, groupUnsub, groupInvitesUnsub].forEach(u => u && u());
     chatNotifUnsubs.forEach(u => u()); chatNotifUnsubs = [];
     Object.values(groupChatUnsubs).forEach(u => u && u()); groupChatUnsubs = {};
-    tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = groupUnsub = null;
+    tasksUnsub = stickiesUnsub = friendsUnsub = reqUnsub = groupUnsub = groupInvitesUnsub = null;
 
     // Close every floating window and the side panel
     // Close all open chat windows
@@ -839,16 +842,25 @@ function subscribeToRequests(uid) {
     query(collection(db, 'friends'), where('to','==',uid), where('status','==','pending')),
     snap => {
       friendRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const badge = document.getElementById('friend-notif');
       const count = document.getElementById('req-count');
-      if (friendRequests.length > 0) {
-        badge.textContent = friendRequests.length;
-        badge.classList.remove('hidden');
-        count.textContent = `(${friendRequests.length})`;
-      } else {
-        badge.classList.add('hidden');
-        count.textContent = '';
-      }
+      const total = friendRequests.length + groupInvites.length;
+      if (count) count.textContent = total > 0 ? `(${total})` : '';
+      updateFriendBadge();
+      renderRequestsList();
+    }
+  );
+}
+
+function subscribeToGroupInvites(uid) {
+  if (groupInvitesUnsub) groupInvitesUnsub();
+  groupInvitesUnsub = onSnapshot(
+    query(collection(db,'groupInvites'), where('to','==',uid), where('status','==','pending')),
+    snap => {
+      groupInvites = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const count = document.getElementById('req-count');
+      const total = friendRequests.length + groupInvites.length;
+      if (count) count.textContent = total > 0 ? `(${total})` : '';
+      updateFriendBadge();
       renderRequestsList();
     }
   );
@@ -895,7 +907,7 @@ function subscribeToGroupUnread(uid) {
 function updateFriendBadge() {
   const btn = document.getElementById('friend-notif');
   if (!btn) return;
-  const total = friendRequests.length + unreadChats.size + unreadGroups.size;
+  const total = friendRequests.length + groupInvites.length + unreadChats.size + unreadGroups.size;
   if (total > 0) { btn.textContent = total; btn.classList.remove('hidden'); }
   else btn.classList.add('hidden');
 }
@@ -1713,15 +1725,33 @@ window.blockFriend = async function(friendDocId, friendUid, name) {
 
 function renderRequestsList() {
   const el = document.getElementById('tab-requests');
-  if (!friendRequests.length) { el.innerHTML=`<div style="color:var(--muted);font-size:12px;padding:16px">No pending requests.</div>`; return; }
-  el.innerHTML = friendRequests.map(r => `
-    <div class="friend-item">
-      <div><div class="friend-name">${esc(r.fromUsername)}</div><div class="friend-status">wants to be friends</div></div>
-      <div style="display:flex;gap:6px">
-        <button class="btn-accent-sm" onclick="acceptFriendReq('${r.id}','${r.from}','${r.fromUsername}')">✓</button>
-        <button class="win-btn" onclick="declineFriendReq('${r.id}')">✕</button>
-      </div>
-    </div>`).join('');
+  let html = '';
+  if (!friendRequests.length && !groupInvites.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:16px">No pending requests.</div>`;
+    return;
+  }
+  if (friendRequests.length) {
+    html += friendRequests.map(r => `
+      <div class="friend-item">
+        <div><div class="friend-name">${esc(r.fromUsername)}</div><div class="friend-status">wants to be friends</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-accent-sm" onclick="acceptFriendReq('${r.id}','${r.from}','${r.fromUsername}')">✓</button>
+          <button class="win-btn" onclick="declineFriendReq('${r.id}')">✕</button>
+        </div>
+      </div>`).join('');
+  }
+  if (groupInvites.length) {
+    html += `<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px;padding-top:8px;border-top:1px solid var(--border)">Group Invites</div>`;
+    html += groupInvites.map(inv => `
+      <div class="friend-item">
+        <div><div class="friend-name">👥 ${esc(inv.groupName)}</div><div class="friend-status">invited by ${esc(inv.fromUsername)}</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-accent-sm" onclick="acceptGroupInvite('${inv.id}')">Join</button>
+          <button class="win-btn" onclick="declineGroupInvite('${inv.id}')">✕</button>
+        </div>
+      </div>`).join('');
+  }
+  el.innerHTML = html;
 }
 
 window.acceptFriendReq = async function(reqId, fromUid, fromUsername) {
@@ -1732,6 +1762,30 @@ window.acceptFriendReq = async function(reqId, fromUid, fromUsername) {
 };
 window.declineFriendReq = async function(reqId) {
   await deleteDoc(doc(db,'friends',reqId));
+};
+
+window.acceptGroupInvite = async function(inviteId) {
+  const inv = groupInvites.find(i=>i.id===inviteId);
+  if (!inv) return;
+  const { groupId, groupName } = inv;
+  // Add user to group members
+  await updateDoc(doc(db,'groupChats',groupId), {
+    members: arrayUnion(currentUser.uid),
+    [`memberNames.${currentUser.uid}`]: userProfile.username
+  });
+  // Post join message
+  const payload = await groupEncrypt(groupId, `${userProfile.username} joined the group.`);
+  await addDoc(collection(db,'groupChats',groupId,'messages'),{
+    from: currentUser.uid, senderName: userProfile.username, ...payload, type:'system', ts: serverTimestamp()
+  });
+  // Mark invite as accepted
+  await updateDoc(doc(db,'groupInvites',inviteId),{ status:'accepted' });
+  // Open the group chat
+  openGroupChat(groupId, groupName);
+};
+
+window.declineGroupInvite = async function(inviteId) {
+  await updateDoc(doc(db,'groupInvites',inviteId),{ status:'declined' });
 };
 
 // ── Chat ──
@@ -1965,39 +2019,48 @@ window.inviteToChat = async function(key, friendUid, friendName) {
   if (notice) notice.innerHTML = '<span style="color:var(--muted)">Inviting…</span>';
   const w = _chatWindows[key];
   if (!w) return;
+
   if (w.isGroup) {
+    // Invite to existing group
     const g = groups.find(g=>g.id===w.groupId);
     if (!g) return;
-    await updateDoc(doc(db,'groupChats',w.groupId), {
-      members: [...g.members, friendUid],
-      memberNames: { ...(g.memberNames||{}), [friendUid]: friendName }
+    await addDoc(collection(db,'groupInvites'),{
+      to: friendUid, toUsername: friendName,
+      from: currentUser.uid, fromUsername: userProfile.username,
+      groupId: w.groupId, groupName: g.name,
+      status: 'pending', createdAt: serverTimestamp()
     });
-    const payload = await groupEncrypt(w.groupId, `${friendName} was added to the group.`);
-    await addDoc(collection(db,'groupChats',w.groupId,'messages'),{
-      from: currentUser.uid, senderName: userProfile.username, ...payload, type:'system', ts: serverTimestamp()
-    });
-    if (notice) notice.innerHTML = `<span style="color:var(--accent)">✓ ${esc(friendName)} added!</span>`;
+    if (notice) notice.innerHTML = `<span style="color:var(--accent)">✓ Invite sent to ${esc(friendName)}!</span>`;
     setTimeout(() => { if(notice) notice.innerHTML=''; _renderInvitePanel(key); }, 1500);
   } else {
-    // Upgrade DM → group
+    // Upgrade DM → new group, invite the third person
     const dmTitle = w.el.querySelector('span').textContent.replace('💬 ','').trim();
     const groupName = `${userProfile.username}, ${dmTitle}, ${friendName}`;
-    const memberUids = [currentUser.uid, w.friendUid, friendUid];
+    const memberUids = [currentUser.uid, w.friendUid];
     const memberNames = {
       [currentUser.uid]: userProfile.username,
-      [w.friendUid]: dmTitle,
-      [friendUid]: friendName
+      [w.friendUid]: dmTitle
     };
+    // Create the group with only the two existing DM participants as full members
     const ref = await addDoc(collection(db,'groupChats'),{
       name: groupName, members: memberUids, memberNames,
       createdBy: currentUser.uid, createdAt: serverTimestamp()
     });
-    const payload = await groupEncrypt(ref.id, `${userProfile.username} created a group with ${dmTitle} and ${friendName}.`);
+    // Post a system message
+    const payload = await groupEncrypt(ref.id, `${userProfile.username} created a group and invited ${friendName}.`);
     await addDoc(collection(db,'groupChats',ref.id,'messages'),{
       from: currentUser.uid, senderName: userProfile.username, ...payload, type:'system', ts: serverTimestamp()
     });
-    if (notice) notice.innerHTML = `<span style="color:var(--accent)">✓ Group created!</span>`;
-    setTimeout(() => { closeChatWindow(key); openGroupChat(ref.id, groupName); }, 800);
+    // Send invite to the third person
+    await addDoc(collection(db,'groupInvites'),{
+      to: friendUid, toUsername: friendName,
+      from: currentUser.uid, fromUsername: userProfile.username,
+      groupId: ref.id, groupName,
+      status: 'pending', createdAt: serverTimestamp()
+    });
+    // Close DM, open the new group right away
+    closeChatWindow(key);
+    openGroupChat(ref.id, groupName);
   }
 };
 async function maybeAutoCleanChat(chatId) {
