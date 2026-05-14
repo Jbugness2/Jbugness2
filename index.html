@@ -861,7 +861,6 @@ window.doLogin = async function() {
   try {
     // Capture password NOW before Firebase consumes it — needed for key unwrapping
     const cred = await signInWithEmailAndPassword(auth, email, pass);
-    await initCrypto(cred.user.uid, pass);
   }
   catch(e) {
     setNotice('login-notice', friendlyError(e), 'error');
@@ -884,7 +883,6 @@ window.doSignup = async function() {
     await setDoc(doc(db,'users',cred.user.uid), { username, email, emailSettings:{}, schedSettings:{}, theme:{} });
     // index username for friend search
     await setDoc(doc(db,'usernames',username.toLowerCase()), { uid: cred.user.uid, username });
-    await initCrypto(cred.user.uid, pass);
   } catch(e) { setNotice('signup-notice', friendlyError(e), 'error'); btn.disabled=false; btn.textContent='Create account →'; }
 };
 window.doLogout = async function() {
@@ -1648,151 +1646,43 @@ function isMessageBlocked(text) {
 }
 
 
-// ══════════════════════════════════════════
-//  E2E Encryption — ECDH P-256 + AES-GCM
-// ══════════════════════════════════════════
-
-const _keyCache = {};
-let _myPrivateKey   = null;
-let _myPublicKeyJwk = null;
+// ══════════════════════════════════════
+//  Encryption — AES-GCM, key derived
+//  from both user IDs (sorted + joined)
+// ══════════════════════════════════════
 
 function _b64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
-function _ub64(s) { const b=atob(s),u=new Uint8Array(b.length); for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i); return u.buffer; }
+function _ub64(s)  { const b=atob(s),u=new Uint8Array(b.length); for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i); return u.buffer; }
 
-async function _deriveWrappingKey(password, salt) {
-  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+// Derive a deterministic AES-GCM key from the two user IDs.
+// Both sides independently arrive at the same key — no key exchange needed.
+async function getChatKey(uidA, uidB) {
+  const secret = [uidA, uidB].sort().join(':');
+  const base   = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
-    { name:'PBKDF2', salt: typeof salt==='string' ? _ub64(salt) : salt, iterations:100000, hash:'SHA-256' },
-    base, { name:'AES-GCM', length:256 }, false, ['wrapKey','unwrapKey']);
+    { name:'PBKDF2', salt: new TextEncoder().encode('taskr-chat-v1'), iterations:100000, hash:'SHA-256' },
+    base, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
 }
 
-async function _wrapPrivateKey(privKey, wrappingKey) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const wrapped = await crypto.subtle.wrapKey('jwk', privKey, wrappingKey, { name:'AES-GCM', iv });
-  return { iv: _b64(iv.buffer), wrapped: _b64(wrapped) };
-}
-
-async function _unwrapPrivateKey(blob, wrappingKey) {
-  return crypto.subtle.unwrapKey(
-    'jwk', _ub64(blob.wrapped), wrappingKey,
-    { name:'AES-GCM', iv: new Uint8Array(_ub64(blob.iv)) },
-    { name:'ECDH', namedCurve:'P-256' }, false, ['deriveKey']);
-}
-
-async function initCrypto(uid, password) {
-  Object.keys(_keyCache).forEach(k => delete _keyCache[k]);
-  _myPrivateKey = null; _myPublicKeyJwk = null;
-
-  // ── Step 1: Try to load existing private key ──
-
-  // 1a. localStorage (fastest)
-  const cached = localStorage.getItem(`e2e_${uid}`);
-  if (cached) {
-    try {
-      const jwk = JSON.parse(cached);
-      _myPrivateKey   = await crypto.subtle.importKey('jwk', jwk, { name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
-      _myPublicKeyJwk = { kty:jwk.kty, crv:jwk.crv, x:jwk.x, y:jwk.y, key_ops:[], ext:true };
-    } catch(_) {
-      localStorage.removeItem(`e2e_${uid}`);
-      _myPrivateKey = null; _myPublicKeyJwk = null;
-    }
-  }
-
-  // 1b. Firestore blob (cross-device, needs password)
-  if (!_myPrivateKey && password) {
-    try {
-      const snap = await getDoc(doc(db,'users',uid));
-      const blob = (snap.data() || {}).encryptedKey;
-      if (blob?.wrapped) {
-        const wk = await _deriveWrappingKey(password, blob.salt);
-        _myPrivateKey   = await _unwrapPrivateKey(blob, wk);
-        _myPublicKeyJwk = blob.pubKey;
-        // Re-cache in localStorage
-        const jwk = await crypto.subtle.exportKey('jwk', _myPrivateKey);
-        localStorage.setItem(`e2e_${uid}`, JSON.stringify(jwk));
-      }
-    } catch(_) { _myPrivateKey = null; }
-  }
-
-  // 1c. Generate fresh keypair
-  if (!_myPrivateKey) {
-    const kp = await crypto.subtle.generateKey({ name:'ECDH', namedCurve:'P-256' }, true, ['deriveKey']);
-    _myPrivateKey = kp.privateKey;
-    const jwk = await crypto.subtle.exportKey('jwk', kp.publicKey);
-    _myPublicKeyJwk = jwk;
-    // Cache immediately
-    const privJwk = await crypto.subtle.exportKey('jwk', _myPrivateKey);
-    localStorage.setItem(`e2e_${uid}`, JSON.stringify(privJwk));
-  }
-
-  // ── Step 2: Write pubKey to Firestore RIGHT NOW (awaited, not background) ──
-  // This is fast — it's just a string write, no PBKDF2
-  try {
-    await setDoc(doc(db,'users',uid), { pubKey: _myPublicKeyJwk }, { merge:true });
-  } catch(e) { console.warn('initCrypto: failed to write pubKey:', e); }
-
-  // ── Step 3: Wrap and store encrypted blob in background (slow PBKDF2) ──
-  if (password && _myPrivateKey) {
-    (async () => {
-      try {
-        const salt = crypto.getRandomValues(new Uint8Array(16));
-        const wk   = await _deriveWrappingKey(password, salt);
-        const { iv, wrapped } = await _wrapPrivateKey(_myPrivateKey, wk);
-        await setDoc(doc(db,'users',uid), {
-          encryptedKey: { iv, wrapped, salt: _b64(salt.buffer), pubKey: _myPublicKeyJwk }
-        }, { merge:true });
-      } catch(e) { console.warn('initCrypto: blob persist failed:', e); }
-    })();
-  }
-}
-
-
-async function reWrapKeyAfterPasswordChange(uid, newPassword) {
-  if (!_myPrivateKey || !_myPublicKeyJwk) return;
-  try {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const wk   = await _deriveWrappingKey(newPassword, salt);
-    const { iv, wrapped } = await _wrapPrivateKey(_myPrivateKey, wk);
-    await setDoc(doc(db,'users',uid), {
-      encryptedKey: { iv, wrapped, salt: _b64(salt.buffer), pubKey: _myPublicKeyJwk }
-    }, { merge:true });
-    const jwk = await crypto.subtle.exportKey('jwk', _myPrivateKey).catch(()=>null);
-    if (jwk) localStorage.setItem(`e2e_${uid}`, JSON.stringify(jwk));
-  } catch(e) { console.warn('reWrapKey:', e); }
-}
-
-async function getSharedKey(friendUid) {
-  if (_keyCache[friendUid]) return _keyCache[friendUid];
-  if (!_myPrivateKey) return null;
-  // Retry a few times — pubKey Firestore write may still be in-flight
-  for (let i = 0; i < 3; i++) {
-    try {
-      const snap   = await getDoc(doc(db,'users',friendUid));
-      const pubJwk = snap.data()?.pubKey;
-      if (!pubJwk) { await new Promise(r => setTimeout(r, 1500)); continue; }
-      const theirPub = await crypto.subtle.importKey('jwk', pubJwk, { name:'ECDH', namedCurve:'P-256' }, false, []);
-      const shared   = await crypto.subtle.deriveKey(
-        { name:'ECDH', public:theirPub }, _myPrivateKey,
-        { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
-      _keyCache[friendUid] = shared;
-      return shared;
-    } catch(e) { return null; }
-  }
-  return null;
+// Cache so we only derive once per conversation
+const _chatKeyCache = {};
+async function getOrDeriveChatKey(friendUid) {
+  if (_chatKeyCache[friendUid]) return _chatKeyCache[friendUid];
+  const key = await getChatKey(currentUser.uid, friendUid);
+  _chatKeyCache[friendUid] = key;
+  return key;
 }
 
 async function e2eEncrypt(friendUid, plaintext) {
-  const key = await getSharedKey(friendUid);
-  if (!key) throw new Error('NO_KEY');
+  const key = await getOrDeriveChatKey(friendUid);
   const iv  = crypto.getRandomValues(new Uint8Array(12));
   const enc = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
   return { iv: _b64(iv.buffer), ct: _b64(enc) };
 }
 
 async function e2eDecrypt(friendUid, msg) {
-  if (!msg.ct) return msg.text || '';
-  const key = await getSharedKey(friendUid);
-  if (!key) return '🔒 encrypted';
+  if (!msg.ct) return msg.text || ''; // legacy plain text
+  const key = await getOrDeriveChatKey(friendUid);
   try {
     const dec = await crypto.subtle.decrypt({ name:'AES-GCM', iv: new Uint8Array(_ub64(msg.iv)) }, key, _ub64(msg.ct));
     return new TextDecoder().decode(dec);
@@ -1809,19 +1699,7 @@ window.sendChatMsg = async function() {
     return; // silently block
   }
   const chatId = [currentUser.uid, activeChatFriendId].sort().join('_');
-  let payload;
-  try {
-    payload = await e2eEncrypt(activeChatFriendId, text);
-  } catch(e) {
-    if (e.message === 'NO_KEY') {
-      // Friend hasn't set up their encryption key yet — show why
-      const myKeyReady = _myPrivateKey !== null;
-      setNotice('chat-notice', myKeyReady
-        ? '🔒 Your friend\'s encryption key isn\'t ready yet — ask them to refresh the page, then try again.'
-        : '🔒 Your encryption key isn\'t ready — please log out and back in.', 'error');
-    }
-    return;
-  }
+  const payload = await e2eEncrypt(activeChatFriendId, text);
   await addDoc(collection(db,'chats',chatId,'messages'),{
     from: currentUser.uid, ...payload, ts: serverTimestamp()
   });
@@ -1981,8 +1859,6 @@ window.savePassword = async function() {
   try {
     await reauthenticateWithCredential(currentUser,EmailAuthProvider.credential(currentUser.email,cur));
     await updatePassword(currentUser,np);
-    // Re-wrap the E2E private key with the new password so cross-device still works
-    await reWrapKeyAfterPasswordChange(currentUser.uid, np);
     ['set-pass-current','set-pass-new','set-pass-confirm'].forEach(id=>document.getElementById(id).value='');
     setNotice('settings-notice','Password updated!','success');
   } catch(e){setNotice('settings-notice',friendlyError(e),'error');}
