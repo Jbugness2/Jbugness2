@@ -4,10 +4,6 @@
   "scheduleEnabled": true,
   "tasks": [
     {
-      "name": "Choir_Refelction",
-      "date": "2026-05-15"
-    },
-    {
       "name": "Avid_Capstone",
       "date": "2026-05-18"
     },
@@ -44,5 +40,5 @@
       "date": "2026-05-08"
     }
   ],
-  "lastSynced": "2026-05-17T13:07:42.807Z"
+  "lastSynced": "2026-05-17T13:08:10.344Z"
 }
